@@ -1,0 +1,78 @@
+---
+title: "Continuity: Persistent State for AI Agents"
+sidebarTitle: "Introduction"
+description: "Continuity externalizes an AI agent's cognitive state into structured, versioned files so identity, memory, tasks, and intent survive across sessions."
+---
+
+Every AI agent starts each session completely blank. No memory of prior work, no identity, no plan, no record of what it learned last time. The context window is ephemeral — whatever the agent thinks, decides, and discovers is lost the moment the session ends. Continuity is a file convention that solves this by pushing the agent's entire cognitive state outside the context window into structured, versioned markdown files.
+
+## The Core Problem
+
+A stateless agent re-discovers, re-learns, and re-orients on every single session. It cannot accumulate intelligence. Every loop — observe → reason → act → update — starts from zero. The agent is forgetful by construction.
+
+The context window is bounded and ephemeral. It holds the agent's working memory for one session, then disappears. This is fine for one-off prompts. For any agent that iterates across sessions — planning, executing, reviewing, handing off to another agent — it is a fundamental limitation.
+
+<Warning>
+Without persistent state, an agent that "learns" something useful in session 3 has forgotten it entirely by session 4. Every insight, every decision, every completed task evaporates at runtime death.
+</Warning>
+
+## How Continuity Solves It
+
+Continuity externalizes the agent's cognitive state into structured, versioned files that live on disk, not in the context window. Identity, knowledge, context, and intent survive across sessions because they are stored outside the process that forgets them.
+
+The model is simple:
+
+1. **Define** — who the agent is, what it knows, what it is currently doing
+2. **Track** — how all of that changes over time
+3. **Reconstitute** — load the right state back at the start of each session
+
+The context window remains ephemeral and bounded. The state files are persistent and unbounded. You push everything that matters outside the window into files, then selectively pull back only what you need each session.
+
+<Note>
+The runtime dies. The agent persists. Add git and every commit becomes a verifiable snapshot of cognitive state — a diff-able, revertible record of exactly what the agent knew and when.
+</Note>
+
+## What You Get
+
+Continuity gives you a complete grammar for agent state:
+
+- **Structured templates** — Markdown files with `{{PLACEHOLDERS}}` covering identity, tasks, memory, tools, plans, snapshots, and more. Copy, fill in, delete what you don't need.
+- **Three-class ontology** — Every file has a type: *State* (what IS, overwrite in place), *History* (what WAS, append-only), or *Library* (what is KNOWN, curated). No confusion about mutability.
+- **Four tiers** — From Minimum (8 files, simple agents) to Advanced (recursive multi-agent systems). Start small, add only what your loops actually need.
+- **State packs** — Pre-wired file sets for specific operating modes: developer, researcher, security, ops, orchestrator, docs-writer, and more. Pick a pack, delete what doesn't apply, customize the rest.
+- **Nesting** — Any file can live at any directory depth. Different projects get their own `STATE.md`, `TODO.md`, and `CONTEXT.md`. A child scope inherits parent rules but cannot weaken them.
+- **Mesh** — State files index nested directories as graph edges. One audit entry can serve both `STATE.md` (current health) and `LEARNINGS.md` (what was learned). Many-to-many relationships across concerns.
+- **Runtime adapters** — Thin adapter files for Claude Code, OpenAI Codex, Hermes, OpenClaw, and Agent Zero. Continuity is runtime-agnostic; adapters handle the entry-file differences.
+
+## What Continuity Is Not
+
+<Tip>
+Understanding what Continuity is *not* is as important as understanding what it is.
+</Tip>
+
+Continuity is not a framework, a runtime, or a database. It does not execute code, manage processes, or store data in rows and columns. It is a **file convention** — a set of structured markdown templates and a grammar for how they relate to each other.
+
+You own the plumbing:
+
+- **How the agent reads files** — `cat`, MCP, direct I/O — your choice
+- **How it writes** — same
+- **Validation** — schema-enforced or trust-based — your choice
+- **Merge and conflict handling** — git's default or custom
+- **Commit cadence** — auto, manual, or staged
+
+Continuity provides the structure. You generate the language your agent speaks inside it. A coding agent may only need `AGENTS.md`, `STATE.md`, and `TODO.md`. A research agent may need `MEMORY.md`, `KNOWLEDGE.md`, and `LEARNINGS.md`. The templates are loop patterns, not mandatory bloat.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Clone the repo and get your first agent booted in 60 seconds.
+  </Card>
+  <Card title="Core Concepts" icon="lightbulb" href="/concepts">
+    Understand the loop model, the three-class ontology, and state-as-code.
+  </Card>
+  <Card title="Tiers & File Selection" icon="layers" href="/core/tiers">
+    Choose the right tier and file set for your agent's loop type.
+  </Card>
+  <Card title="State Packs" icon="box" href="/packs/overview">
+    Browse pre-wired file sets for specific agent operating modes.
+  </Card>
+</CardGroup>

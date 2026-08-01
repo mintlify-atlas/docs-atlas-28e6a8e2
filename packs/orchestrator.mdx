@@ -1,0 +1,131 @@
+---
+title: "Orchestrator pack: coordinating multiple agents"
+sidebarTitle: "Orchestrator"
+description: "The orchestrator pack gives a coordinating agent a shared task queue, machine-readable binding contracts, a cross-agent event log, and state snapshots."
+---
+
+The orchestrator pack is for agents whose primary job is to coordinate other agents — assigning tasks, tracking completion, spawning sub-agents with bounded contracts, and maintaining a coherent view of a multi-agent pipeline. Without coordination infrastructure, multi-agent systems produce overlapping work, silent failures, and unbounded resource use. This pack provides the state layer that makes coordination visible, auditable, and controllable: a shared task queue, machine-readable agent contracts, an append-only event log, and a nesting pattern that places specialist packs under the orchestrator's root.
+
+## Files in this pack
+
+| File | Role |
+|------|------|
+| `AGENTS.md` | Entry point, governance, and agent registry |
+| `TASKS.md` | Shared task queue for multi-agent coordination |
+| `PLAN.md` | Execution plan with phases and dependencies |
+| `EVENTS.md` | Cross-agent event log (append-only) |
+| `SNAPSHOT.md` | Last known good state of the full pipeline |
+| `BINDING.schema.json` | Machine-readable contracts for sub-agent spawning |
+
+### AGENTS.md
+
+The orchestrator entry file contains everything a standard `AGENTS.md` contains, plus an agent registry — a table listing every agent that operates under this orchestrator, its type (`worker` or `team-leader`), its role, the pack it uses, its maximum delegation depth, and the maximum number of subordinates it may spawn. Workers are sterile: `max_depth: 0`, `max_subordinates: 0`, no access to `call_subordinate`. Team leaders may spawn workers, but cannot spawn other team leaders. No subordinate has higher privileges than its parent.
+
+### TASKS.md — shared task queue for multi-agent coordination
+
+`TASKS.md` is the coordination surface that prevents agents from doing duplicate or conflicting work. Every task in the pipeline has an ID, a description, an assigned agent, a status, an evidence field, and a phase. An agent claims a task by moving its status from `pending` to `in-progress` — no silent overlap is permitted. A task is not complete until an evidence artifact exists: test results, a PR link, a review output, or a commit. Failed and blocked tasks record their reason explicitly.
+
+Task states:
+
+| State | Meaning |
+|-------|---------|
+| `pending` | Not yet assigned or prerequisites unmet |
+| `assigned` | Assigned but not started |
+| `in-progress` | Agent actively working |
+| `completed` | Finished with evidence |
+| `failed` | Agent could not complete — reason recorded |
+| `blocked` | Agent hit a blocker — intervention required |
+
+### BINDING.schema.json — machine-readable contracts for sub-agents
+
+Before any sub-agent is spawned, the orchestrator creates a binding: a structured contract that defines exactly who the agent is, what it is tasked with, what tools it may use, what budget it has, and under what conditions it stops. Bindings are validated against `BINDING.schema.json` before the agent executes. An unbound agent is an untracked agent — the pack governance forbids spawning without a binding.
+
+A binding contract has six required fields:
+
+<Tabs>
+  <Tab title="who">
+    The agent's identity: name, role, parent agent, and type (`worker` or `team-leader`). Workers cannot spawn subordinates. Team leaders may spawn workers only, up to `max_subordinates`.
+  </Tab>
+  <Tab title="what">
+    The objective and success criteria. The objective is the specific task. The success criteria describe what a verifiable completion looks like — not "implement auth" but "endpoint returns 201 on valid input, 400 on invalid input, tests passing."
+  </Tab>
+  <Tab title="budget">
+    Hard limits on resources: `max_seconds` (wall-clock time), `max_tokens` (LLM token budget), `max_turns` (reasoning turns), `max_depth` (delegation depth — 0 for workers), `max_subordinates`, and `max_disk_mb`. Every agent has a budget. No infinite recursion. No unbounded token spend.
+  </Tab>
+  <Tab title="allowed_tools">
+    An explicit list of tools the agent may use. Workers must not include `call_subordinate`. If a tool is not on the list, the agent does not use it — even if the runtime makes it available.
+  </Tab>
+  <Tab title="stop_conditions">
+    Conditions that terminate the binding: "Task completed," "Budget exhausted," "Checkpoint approval denied." Stop conditions are evaluated continuously during execution.
+  </Tab>
+  <Tab title="writeback">
+    Where the agent writes its result output: a file path and format (`markdown`, `json`, or `text`). Results are written here for the orchestrator to collect after the binding closes.
+  </Tab>
+</Tabs>
+
+An optional `h_gate` field defines human approval triggers — actions within the agent's scope that require a human to confirm before proceeding, such as deploying to production or deleting a database.
+
+See [Runtime Contracts](/advanced/runtime-contracts) for full schema details and worked binding examples.
+
+### EVENTS.md — cross-agent event log
+
+`EVENTS.md` is the auditable record of everything that happened in the pipeline. It is append-only: entries are never modified, only added. Every event has a timestamp (ISO 8601 UTC), an event type, the agent that generated it, and enough detail to reconstruct what happened. The event types cover the full agent lifecycle — `binding-created`, `binding-closed`, `task-assigned`, `task-started`, `task-completed`, `task-failed`, `task-blocked`, `checkpoint-requested`, and `snapshot-saved`. If an event is corrected, a new row is added with type `event-corrected` referencing the original — the original row is never touched.
+
+### PLAN.md
+
+The execution plan that maps work to phases and captures dependencies between tasks. The orchestrator reads `PLAN.md` at the start of each session to understand the full pipeline shape before reading `TASKS.md` for current status. For multi-phase pipelines — research, then implementation, then review, then deploy — `PLAN.md` makes the sequencing explicit and prevents the orchestrator from assigning phase-3 work before phase-2 is complete.
+
+### SNAPSHOT.md
+
+A timestamped record of the last known good state of the entire pipeline: which tasks were complete, which agents were active, what the overall status was. The orchestrator saves a snapshot after all tasks in a phase complete or after any major milestone. If a pipeline needs to be restarted from a stable point, `SNAPSHOT.md` provides the recovery anchor.
+
+## Nesting pattern: orchestrator at root, specialist packs in subdirs
+
+The orchestrator pack lives at the root of the project. Each specialist agent that the orchestrator coordinates gets its own pack in a subdirectory. Each agent loads only its own state chain — the backend agent reads `backend/AGENTS.md`, not the root `AGENTS.md`.
+
+```
+/AGENTS.md           # orchestrator entry
+/TASKS.md            # shared task queue
+/PLAN.md             # execution plan
+/EVENTS.md           # event log
+/SNAPSHOT.md         # pipeline snapshot
+/BINDING.schema.json # binding contract schema
+├── backend/
+│   ├── AGENTS.md    # backend pack entry
+│   ├── STATE.md
+│   ├── TODO.md
+│   ├── WARNING.md
+│   └── CHECKPOINT.md
+├── frontend/
+│   ├── AGENTS.md    # frontend pack entry
+│   ├── STATE.md
+│   ├── TODO.md
+│   └── CHECKPOINT.md
+└── research/
+    ├── AGENTS.md    # researcher pack entry
+    ├── STATE.md
+    ├── TODO.md
+    ├── MEMORY.md
+    ├── KNOWLEDGE.md
+    └── LEARNINGS.md
+```
+
+Safety rules set at the root accumulate downward. A subdirectory agent cannot weaken a constraint set in the root `AGENTS.md`. If the root forbids production deploys without approval, every sub-agent inherits that constraint regardless of what its local pack says.
+
+## Copying the orchestrator pack
+
+```bash
+# Copy the orchestrator pack to the project root
+cp -r continuity/packs/orchestrator/. ./my-project/
+
+# Add specialist packs in subdirectories
+cp -r continuity/packs/backend/.   ./my-project/backend/
+cp -r continuity/packs/frontend/.  ./my-project/frontend/
+cp -r continuity/packs/researcher/. ./my-project/research/
+```
+
+After copying, fill `{{PLACEHOLDER}}` values in each file — especially the agent registry table in `AGENTS.md`, which needs real agent names, roles, and budget limits before any agents are spawned.
+
+<Note>
+  For full details on binding schema fields, validation, and runtime integration, see [Runtime Contracts](/advanced/runtime-contracts).
+</Note>

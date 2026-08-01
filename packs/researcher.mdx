@@ -1,0 +1,93 @@
+---
+title: "Researcher pack: state files for long-running research"
+sidebarTitle: "Researcher"
+description: "The researcher pack sustains multi-session research with a memory layer for durable facts, a knowledge layer for reference docs, and accumulated learnings."
+---
+
+The researcher pack is built for agents that gather, synthesize, and maintain information across multiple sessions — work where continuity matters as much as any single finding. A research agent that starts each session from scratch repeats discovery work, loses confidence calibration, and cannot build on prior synthesis. This pack solves that by giving the agent three distinct storage layers — active state, durable memory, and curated knowledge — each with its own write discipline and update cadence. The result is a research system that compounds across sessions rather than resetting at each one.
+
+## Files in this pack
+
+| File | Role |
+|------|------|
+| `AGENTS.md` | Entry point, governance, and research methodology |
+| `STATE.md` | Current research question, status, and open threads |
+| `TODO.md` | Pending investigations and next actions |
+| `MEMORY.md` | Durable facts index with source and confidence |
+| `KNOWLEDGE.md` | Structured knowledge base and reference index |
+| `LEARNINGS.md` | Accumulated insights, patterns, and open questions |
+
+### AGENTS.md
+
+The entry point that defines the load order and the research methodology the agent follows. The methodology has six steps: define the question (written in `STATE.md` before searching — vague questions produce vague results), gather sources (primary over secondary, official docs and peer-reviewed papers over blog posts), extract facts (each with a source, confidence level, and retrieval date), synthesize (connect facts into patterns and record insights in `LEARNINGS.md`), identify gaps (what is still unknown), and cite everything. The governance rules encode epistemic discipline: never present assumptions as facts, label confidence below 0.9 explicitly, record retrieval dates for web-sourced facts, and never close an unanswered question without explicitly noting it is open.
+
+### STATE.md
+
+The current research status: the active research question, what is known, what is not yet known, and any open threads that are actively being investigated. Unlike a coding `STATE.md` that tracks environment configuration, the researcher `STATE.md` tracks the shape of the knowledge gap. At the start of every session, the agent reads this file to re-orient to where the research stands before beginning new work.
+
+### TODO.md
+
+The queue of pending investigations — specific searches, sources to read, claims to verify, experts to consult. Research tasks are not code tasks; they often branch and produce new tasks as a result of their own completion. The agent keeps this file current by adding new threads as they emerge and removing items when they are completed or closed.
+
+## Memory layer: MEMORY.md and the memory/ directory
+
+The memory layer is the researcher pack's primary differentiator from a general-purpose agent. It gives the agent a place to accumulate durable facts that persist across sessions and can be retrieved on demand.
+
+`MEMORY.md` is an index file that tracks verified facts in a structured table: the fact, its source, a confidence level (on a 0–1 scale), and the retrieval date. For large fact sets, individual topic files live in a `memory/` subdirectory — `memory/oauth-facts.md`, `memory/token-security-facts.md` — and `MEMORY.md` indexes them.
+
+The confidence scale the pack uses:
+
+| Level | Meaning |
+|-------|---------|
+| 0.95–1.0 | Verified by multiple independent primary sources |
+| 0.80–0.94 | Single primary source or multiple secondary sources agree |
+| 0.60–0.79 | Single secondary source or extrapolation from related facts |
+| 0.40–0.59 | Inferred from indirect evidence — label as assumption |
+| < 0.40 | Speculative — do not state as fact |
+
+Facts are never deleted from memory. If a fact changes, it is updated in place with a correction note and the date of the correction.
+
+## Knowledge layer: KNOWLEDGE.md and the knowledge/ directory
+
+The knowledge layer holds curated reference material — structured topic summaries, research reports, external doc excerpts, and domain notes. It is distinct from the memory layer: memory holds specific verifiable facts, while knowledge holds synthesized understanding of a topic.
+
+`KNOWLEDGE.md` is an index of topics, each with a summary, source, and confidence assessment. For topics that require deeper treatment, dedicated files live in a `knowledge/` subdirectory — `knowledge/oauth-2-1-overview.md`, `knowledge/token-rotation-patterns.md` — and each file includes a title, a last-reviewed date, a sources list, and a confidence assessment. Knowledge files are reviewed periodically and updated when the underlying facts drift.
+
+<Tip>
+  Keep the memory and knowledge layers separate. Memory holds dated, source-attributed facts organized by retrieval event. Knowledge holds timeless, topic-organized reference material. Do not merge the directories — different purposes, different structures, different update cadences.
+</Tip>
+
+### LEARNINGS.md
+
+The soft-rules file: accumulated insights, patterns that emerged from completed research, and open questions that remain unresolved. This is where the agent records things like "PKCE is now mandatory in OAuth 2.1 for all client types, not just SPAs" or "security specs evolve by deprecating, not removing." `LEARNINGS.md` is written in rules, not stories — it records what the agent has concluded, not the sequence of events that led there.
+
+## Typical multi-session research workflow
+
+At session start, the agent reads `AGENTS.md` for the methodology, reads `STATE.md` to re-orient to the current research question and open threads, and reads `TODO.md` for the next investigation. For complex topics, it may also scan `MEMORY.md` and `KNOWLEDGE.md` to avoid re-discovering facts already verified in prior sessions.
+
+During work, the agent appends new facts to `memory/` files as it verifies them and updates `MEMORY.md`'s index. When it synthesizes a new pattern or insight, it appends to `LEARNINGS.md`. When it completes an investigation thread, it removes the item from `TODO.md` and records any new threads that emerged.
+
+At session end, the agent updates `STATE.md` with the current research question status, any new open threads, and any resolved gaps. It refreshes `KNOWLEDGE.md` if new reference material was curated.
+
+## Copying the researcher pack
+
+```bash
+# Copy all researcher pack files into your research directory
+cp -r continuity/packs/researcher/. ./my-research/
+
+# Create the subdirectories for large fact sets
+mkdir -p ./my-research/memory/
+mkdir -p ./my-research/knowledge/
+```
+
+After copying, replace `{{PROJECT_NAME}}` throughout and fill in the initial research question in `STATE.md`. The memory and knowledge index files can start empty — they populate as the agent does work.
+
+## When to extend with more files
+
+<Accordion title="Add PLAN.md for structured, multi-phase research">
+  If the research has a defined methodology with sequential phases — literature review, then primary source gathering, then synthesis, then gap analysis — add `PLAN.md` from the developer pack. A research plan helps the agent stay on track across many sessions and makes the scope of the work explicit.
+</Accordion>
+
+<Accordion title="Add ARTIFACTS.md when the research produces outputs">
+  If the agent is generating reports, summaries, data exports, or other durable outputs, add `ARTIFACTS.md` to index them. Each entry records the output type, the date it was generated, the research question it addresses, and the file path. Without an artifacts index, outputs accumulate without a map.
+</Accordion>

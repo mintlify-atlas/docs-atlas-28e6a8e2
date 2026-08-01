@@ -1,0 +1,269 @@
+---
+title: "Runtime contracts and binding lifecycle for agents"
+sidebarTitle: "Runtime Contracts"
+description: "How the Advanced tier's binding contract, checkpoint gate, and action file govern recursive multi-agent delegation with finite, auditable authorization."
+---
+
+Most agents work fine with state files and a clear scope chain. Recursive agents — agents that spawn sub-agents, delegate tasks across boundaries, or operate within strict resource budgets — need a stronger guarantee. The Advanced tier adds a machine-readable binding contract that defines exactly who is running, what they are authorized to do, how many resources they may consume, and when they must stop. Every binding is finite. Every authorization is explicit. Every checkpoint is logged. This page covers the three Advanced tier files, the full binding lifecycle, and the `BINDING.schema.json` field reference.
+
+## What a binding is
+
+A binding is a **finite authorization for a computation**. It answers five questions before any work begins:
+
+- **Who** is running — the agent's name, role, and parent agent (if delegated)
+- **What** they are doing — the objective and the criteria that define success
+- **What tools** they may use — an explicit allowlist; anything not listed is forbidden
+- **What budget** they have — seconds, tokens, turns, recursion depth, disk space
+- **When to stop** — explicit stop conditions that terminate the binding regardless of progress
+
+Without a binding, a recursive agent can drift: consuming unbounded resources, using tools it was never meant to touch, or silently delegating beyond its intended scope. The binding contract makes all of these constraints machine-readable and auditable.
+
+## Binding lifecycle
+
+Every binding moves through a fixed sequence of phases:
+
+<Steps>
+  <Step title="POTENTIAL">
+    The binding exists as a declared intent. The contract is written but execution has not begun. Budget and tool constraints are stated; the agent has not yet acted on them.
+  </Step>
+  <Step title="BIND">
+    The agent accepts the contract. Identity, objective, allowed tools, and budget are locked. Any action outside these constraints is a violation detectable by `INIT.md` validation.
+  </Step>
+  <Step title="RECURSE">
+    The agent may delegate sub-tasks to child agents. Each child receives its own binding — a narrower authorization derived from the parent. `max_depth` in the budget limits how deep delegation can go.
+  </Step>
+  <Step title="COMPOSE">
+    Sub-agent results are assembled. Outputs from child bindings flow back to the parent's context. Composition is explicit — the parent binding declares what it expects from each child via `success_criteria`.
+  </Step>
+  <Step title="VERIFY">
+    The checkpoint gate fires. Evidence is checked against `evidence.required_evidence`. If the checkpoint type is `manual`, a human approves. If `scripted`, automated checks run. If `evidence`, output must meet a quality threshold.
+  </Step>
+  <Step title="PERSIST">
+    Verified outputs are written back to state files according to the `writeback` declaration. `STATE.md`, `ARTIFACTS.md`, or any other target receives the result in the declared format.
+  </Step>
+  <Step title="UNBIND">
+    The binding is released. Resources are freed. The event is logged to `logs/events.jsonl`. The agent returns to an unbound state, ready for a new binding or session end.
+  </Step>
+</Steps>
+
+## The three Advanced tier files
+
+The Advanced tier adds exactly three files to the Full tier. Together they form the runtime contract system:
+
+<CardGroup cols={2}>
+  <Card title="CHECKPOINT.md">
+    The approval gate. Defines when to pause before irreversible actions. Three gate types: `manual` (human approval required), `scripted` (automated structural checks), `evidence` (output must meet quality threshold). Every trigger and result is logged to `logs/events.jsonl`.
+  </Card>
+  <Card title="AGENT_ACTIONS.md">
+    The action reference. Documents the conceptual action vocabulary the agent uses — what each action class is, what preconditions it requires, and what post-conditions it produces. Serves as a contract between the agent's reasoning and its execution layer.
+  </Card>
+  <Card title="BINDING.schema.json">
+    The machine-readable binding contract. JSON Schema (draft 2020-12) that validates every binding before execution begins. Fields are documented in full below. Runtime validators use this schema to detect constraint drift, dangling edges, and budget violations before they cause silent failures.
+  </Card>
+</CardGroup>
+
+## BINDING.schema.json field reference
+
+The schema requires `binding_id`, `who`, `what`, `budget`, `allowed_tools`, and `stop_conditions`. The `checkpoint`, `evidence`, and `writeback` objects are optional but recommended for any binding that involves irreversible actions or multi-agent delegation.
+
+### Top-level fields
+
+<ParamField path="binding_id" type="string" required>
+  Unique identifier for this binding instance. Used in logs, audit trails, and cross-binding references. Format is operator-defined; UUIDs or slugs both work.
+</ParamField>
+
+<ParamField path="allowed_tools" type="array of strings" required>
+  Explicit allowlist of tools this agent may use during the binding. Any tool not listed here is forbidden for the duration. Examples: `["read_file", "write_file", "run_tests"]`. An empty array means no tools are permitted.
+</ParamField>
+
+<ParamField path="stop_conditions" type="array of strings" required>
+  Conditions that terminate the binding immediately, regardless of progress. Evaluated after every action. Examples: `["budget.max_tokens exceeded", "checkpoint failed", "parent binding unbound"]`.
+</ParamField>
+
+### `who` object
+
+<ParamField path="who" type="object" required>
+  Identifies the agent accepting this binding.
+
+  <Expandable title="Sub-fields">
+    <ParamField path="who.name" type="string" required>
+      The agent's name — matches the value in `IDENTITY.md`.
+    </ParamField>
+    <ParamField path="who.role" type="string" required>
+      The role this agent plays in the current binding. Examples: `"orchestrator"`, `"backend-worker"`, `"verifier"`.
+    </ParamField>
+    <ParamField path="who.parent" type="string">
+      The `binding_id` of the parent binding if this is a delegated sub-binding. Absent for top-level bindings.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### `what` object
+
+<ParamField path="what" type="object" required>
+  Declares the objective and success criteria for this binding.
+
+  <Expandable title="Sub-fields">
+    <ParamField path="what.objective" type="string" required>
+      Plain-language description of what this binding is meant to accomplish.
+    </ParamField>
+    <ParamField path="what.success_criteria" type="string">
+      The condition that, when true, allows the binding to proceed to `VERIFY`. If absent, the agent uses judgment; if present, it is checked at the `COMPOSE` → `VERIFY` transition.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### `budget` object
+
+<ParamField path="budget" type="object" required>
+  Resource limits for this binding. All sub-fields are integers. The binding enters `stop_conditions` evaluation as soon as any limit is reached.
+
+  <Expandable title="Sub-fields">
+    <ParamField path="budget.max_seconds" type="integer">
+      Wall-clock time limit in seconds. Binding must complete or halt before this elapses.
+    </ParamField>
+    <ParamField path="budget.max_tokens" type="integer">
+      Total token budget across all turns in this binding. Counts input and output tokens.
+    </ParamField>
+    <ParamField path="budget.max_turns" type="integer">
+      Maximum number of reasoning turns (observe → reason → act cycles) permitted.
+    </ParamField>
+    <ParamField path="budget.max_depth" type="integer">
+      Maximum recursion depth for sub-agent delegation. A value of `1` means this agent may not delegate further. A value of `3` allows three levels of nesting.
+    </ParamField>
+    <ParamField path="budget.max_disk_mb" type="integer">
+      Maximum disk space in megabytes that this binding may write. Applies to all file writes combined across the binding's lifetime.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### `checkpoint` object
+
+<ParamField path="checkpoint" type="object">
+  Configures the checkpoint gate that fires at the `VERIFY` phase.
+
+  <Expandable title="Sub-fields">
+    <ParamField path="checkpoint.type" type="string">
+      Gate type. One of `"manual"` (human approval required before continuing), `"scripted"` (automated checks — disk usage, conflict detection, scope validation), or `"evidence"` (output must meet a declared quality threshold).
+    </ParamField>
+    <ParamField path="checkpoint.triggers" type="array of strings">
+      Conditions that cause the checkpoint to fire mid-binding, not just at `VERIFY`. Examples: `["before irreversible external action", "before memory mutation", "before infrastructure change"]`.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### `evidence` object
+
+<ParamField path="evidence" type="object">
+  Declares what evidence must exist before the binding can proceed to `PERSIST`.
+
+  <Expandable title="Sub-fields">
+    <ParamField path="evidence.required_evidence" type="array of strings">
+      List of evidence types that must be present. Examples: `["passing test suite", "artifact in artifacts/", "commit SHA"]`. A task is not complete without reviewable artifacts.
+    </ParamField>
+    <ParamField path="evidence.validation_method" type="string">
+      How the evidence is checked. Examples: `"automated CI"`, `"human review"`, `"schema_validate.py"`.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### `writeback` object
+
+<ParamField path="writeback" type="object">
+  Declares where and how the binding's output is written back to state files at the `PERSIST` phase.
+
+  <Expandable title="Sub-fields">
+    <ParamField path="writeback.to" type="string">
+      Target file path for the writeback. Examples: `"STATE.md"`, `"ARTIFACTS.md"`, `"runs/active/STATE.md"`.
+    </ParamField>
+    <ParamField path="writeback.format" type="string">
+      Format of the written output. Examples: `"markdown"`, `"json"`, `"yaml"`.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Example binding
+
+A complete binding for a backend sub-agent delegated to run database migration tests:
+
+```json
+{
+  "binding_id": "bind-db-migration-2026-06-29",
+  "who": {
+    "name": "backend-worker",
+    "role": "database-migration-verifier",
+    "parent": "bind-orchestrator-deploy-2026-06-29"
+  },
+  "what": {
+    "objective": "Run migration tests against staging database and confirm zero data loss",
+    "success_criteria": "All migration tests pass; row counts match pre-migration snapshot"
+  },
+  "budget": {
+    "max_seconds": 300,
+    "max_tokens": 50000,
+    "max_turns": 20,
+    "max_depth": 1,
+    "max_disk_mb": 50
+  },
+  "allowed_tools": ["read_file", "run_tests", "query_database", "write_file"],
+  "checkpoint": {
+    "type": "evidence",
+    "triggers": [
+      "before any write to production database",
+      "before schema-altering migration"
+    ]
+  },
+  "evidence": {
+    "required_evidence": ["passing test suite", "artifact in artifacts/"],
+    "validation_method": "automated CI"
+  },
+  "stop_conditions": [
+    "budget.max_tokens exceeded",
+    "checkpoint type=evidence failed",
+    "parent binding unbound"
+  ],
+  "writeback": {
+    "to": "runs/active/STATE.md",
+    "format": "markdown"
+  }
+}
+```
+
+## When to use the Advanced tier
+
+The Advanced tier is designed for recursive multi-agent systems. You do not need it for single-agent workflows.
+
+<Tabs>
+  <Tab title="Use Advanced tier when…">
+    - Your agent spawns sub-agents and needs to bound their resource usage
+    - Actions are irreversible and require a formal checkpoint before proceeding
+    - Multiple agents write to shared state and you need ownership boundaries enforced
+    - You want CI-level validation that detects constraint drift before it causes failures
+    - Delegation depth needs a hard limit to prevent runaway recursion
+  </Tab>
+  <Tab title="Skip Advanced tier when…">
+    - You have a single agent with a bounded scope
+    - Actions are reversible or low-risk
+    - Your workflow is captured well by `STATE.md`, `TODO.md`, and `WARNING.md`
+    - You are using the Minimum, Standard, or Full tier and have not hit the problems bindings solve
+  </Tab>
+</Tabs>
+
+<Note>
+  The Full tier already includes `WARNING.md` and `CHECKPOINT.md` is available as a standalone safety gate. The Advanced tier adds `BINDING.schema.json` and `AGENT_ACTIONS.md` for teams that need machine-readable contracts and recursive delegation discipline. Most agents do not need this. Add it when your agent actually loops across agent boundaries.
+</Note>
+
+<CardGroup cols={2}>
+  <Card title="Nesting" href="/advanced/nesting">
+    How scope chains work — the foundation that binding authority flows through.
+  </Card>
+  <Card title="Vector Retrieval" href="/advanced/vector-retrieval">
+    Schema validation at the mesh level: CI checks, drift detection, and semantic search.
+  </Card>
+  <Card title="Binding Schema Reference" href="/reference/binding-schema">
+    Full JSON Schema source for `BINDING.schema.json`.
+  </Card>
+  <Card title="Core Tiers" href="/core/tiers">
+    Minimum, Standard, Full, and Advanced — which files belong to each tier.
+  </Card>
+</CardGroup>

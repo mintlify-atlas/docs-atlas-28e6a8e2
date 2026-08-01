@@ -1,0 +1,260 @@
+---
+title: "Continuity scripts for scaffolding and validation"
+sidebarTitle: "Scripts"
+description: "Three bash scripts for initializing the scaffold, validating placeholder replacement, and auditing state files for broken paths and missing files."
+---
+
+Continuity ships three utility scripts that cover the full lifecycle of a workspace: initial scaffolding, placeholder validation before deployment, and ongoing audit of the state file structure. Each script is standalone bash — no dependencies beyond a POSIX shell — and accepts a directory argument so it can target any workspace path, not just the current directory.
+
+## Script overview
+
+| Script | What it does | Usage |
+|---|---|---|
+| `scripts/init-agent.sh` | Creates the full directory scaffold with `.gitkeep` files | `./scripts/init-agent.sh /target/directory` |
+| `scripts/check-placeholders.sh` | Fails if any `{{UPPER_CASE}}` markers remain unfilled | `./scripts/check-placeholders.sh /your/workspace/` |
+| `skills/continuity/scripts/state-file-audit.sh` | Read-only audit of broken paths, missing files, and stale state | `bash state-file-audit.sh /path/to/workspace` |
+
+## init-agent.sh
+
+`init-agent.sh` creates the complete Continuity directory structure in a target directory. It uses `mkdir -p` to create all required subdirectories in one pass and then touches a `.gitkeep` file in each directory so they are tracked by git even when empty. The script does not copy or generate any template files — those come from the repository and are versioned there.
+
+```bash
+#!/usr/bin/env bash
+# init-agent.sh — Regenerate continuity scaffold with directory structure
+# Usage: ./scripts/init-agent.sh [BASE_DIR]
+
+set -euo pipefail
+
+BASE_DIR="${1:-$(pwd)}"
+
+echo "Initializing continuity scaffold in: $BASE_DIR"
+
+mkdir -p "$BASE_DIR"/{memory/{semantic,procedural,episodic,working},completed,logs,journal,reflections,snapshots,scripts,examples,archive,audits,proposals,setup,artifacts,knowledge,memories}
+
+for dir in logs journal reflections snapshots archive completed memory/semantic memory/procedural memory/episodic memory/working audits proposals setup artifacts knowledge memories; do
+  touch "$BASE_DIR/$dir/.gitkeep"
+done
+
+echo "Directory structure created."
+echo "Next: Copy template files from this repo into $BASE_DIR and replace placeholders."
+echo "Done."
+```
+
+After running this script, copy the template `.md` files from the repository into the target directory and replace all `{{PLACEHOLDER}}` markers before the agent boots.
+
+```bash
+# 1. Create the scaffold
+./scripts/init-agent.sh /path/to/my-agent/
+
+# 2. Copy template files
+cp continuity/{AGENTS,IDENTITY,SELF,SOUL,STATE,INIT,TODO,SNAPSHOT}.md /path/to/my-agent/
+
+# 3. Replace placeholders — then validate with check-placeholders.sh
+```
+
+<Note>
+The script creates the directory structure only. Template files — `STATE.md`, `TODO.md`, `AGENTS.md`, and all others — are copied from the repository and versioned there. The scaffold and the templates are separate: `init-agent.sh` builds the container; you populate it.
+</Note>
+
+## check-placeholders.sh
+
+`check-placeholders.sh` scans a workspace directory for any remaining `{{UPPER_CASE}}` markers in `.md`, `.json`, and `.sh` files. It exits with code `0` if all placeholders have been replaced and code `1` if any remain, making it suitable as a CI pre-flight check or a local gate before deploying a new agent workspace.
+
+```bash
+#!/usr/bin/env bash
+# check-placeholders.sh — Fail if unreplaced {{...}} markers remain
+# Usage: ./scripts/check-placeholders.sh [DIRECTORY]
+
+set -euo pipefail
+
+DIR="${1:-$(pwd)}"
+FOUND=0
+
+echo "Checking for unreplaced placeholders in: $DIR"
+
+while IFS= read -r file; do
+  matches=$(grep -c '{{[A-Z_]*}}' "$file" 2>/dev/null || true)
+  if [ "$matches" -gt 0 ]; then
+    echo "FAIL: $file has $matches unreplaced placeholders"
+    FOUND=1
+  fi
+done < <(find "$DIR" -name '*.md' -o -name '*.json' -o -name '*.sh' | grep -v '.git/')
+
+if [ "$FOUND" -eq 0 ]; then
+  echo "OK: No unreplaced placeholders found."
+  exit 0
+else
+  echo "ERROR: Unreplaced placeholders detected. Fill in {{UPPER_CASE}} values before deployment."
+  exit 1
+fi
+```
+
+Run this after copying templates and filling in values:
+
+```bash
+./scripts/check-placeholders.sh /path/to/my-agent/
+# OK: No unreplaced placeholders found.
+```
+
+<Warning>
+If `check-placeholders.sh` exits with code `1`, the workspace contains template stubs that the agent will read verbatim. An agent that sees `{{AGENT_NAME}}` instead of a real name will not boot correctly. Always run this script before first boot.
+</Warning>
+
+## state-file-audit.sh
+
+`state-file-audit.sh` is a read-only diagnostic that checks the structural health of a Continuity workspace. It does not modify any files. It checks for four categories of problems and exits with code `1` if any required checks fail.
+
+```bash
+#!/usr/bin/env bash
+# state-file-audit.sh — Check for broken paths, stale facts, missing files.
+# Runtime-agnostic. Accepts a workspace directory as argument.
+# Read-only — no modifications.
+#
+# Usage: bash state-file-audit.sh /path/to/workspace
+
+set -euo pipefail
+
+STATE_DIR="${1:-.}"
+EXIT_CODE=0
+
+echo "=== State File Audit $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+echo "Workspace: $STATE_DIR"
+echo
+
+# 1. Broken path references
+echo "--- Broken Path Check ---"
+if [ -f "$STATE_DIR/STATE.md" ]; then
+  broken=$(grep -rn 'continuity/' "$STATE_DIR"/*.md 2>/dev/null || true)
+  if [ -n "$broken" ]; then
+    echo "FOUND broken path references:"
+    echo "$broken"
+    echo
+    EXIT_CODE=1
+  else
+    echo "No broken path references found."
+  fi
+fi
+echo
+
+# 2. File existence check
+echo "--- File Existence Check ---"
+EXPECTED_FILES=(
+  "$STATE_DIR/AGENTS.md"
+  "$STATE_DIR/STATE.md"
+  "$STATE_DIR/TODO.md"
+  "$STATE_DIR/INIT.md"
+  "$STATE_DIR/SNAPSHOT.md"
+)
+
+for f in "${EXPECTED_FILES[@]}"; do
+  if [ ! -f "$f" ]; then
+    echo "MISSING: $f"
+    EXIT_CODE=1
+  fi
+done
+
+# Check for optional files and report
+OPTIONAL_FILES=(
+  "$STATE_DIR/MEMORY.md"
+  "$STATE_DIR/PLAN.md"
+  "$STATE_DIR/LEARNINGS.md"
+  "$STATE_DIR/WARNING.md"
+  "$STATE_DIR/CHECKPOINT.md"
+)
+
+for f in "${OPTIONAL_FILES[@]}"; do
+  if [ ! -f "$f" ]; then
+    echo "OPTIONAL MISSING: $f"
+  fi
+done
+
+# Check for expected directories
+EXPECTED_DIRS=(
+  "$STATE_DIR/completed"
+  "$STATE_DIR/snapshots"
+)
+
+for d in "${EXPECTED_DIRS[@]}"; do
+  if [ ! -d "$d" ]; then
+    echo "MISSING DIR: $d"
+  fi
+done
+
+if [ "$EXIT_CODE" -eq 0 ]; then
+  echo "All required files present."
+fi
+echo
+
+# 3. TODO discipline check
+echo "--- TODO Discipline Check ---"
+if [ -f "$STATE_DIR/TODO.md" ]; then
+  TODO_DONE=$(grep -c '## Done\|DONE\|~~' "$STATE_DIR/TODO.md" 2>/dev/null || echo "0")
+  if [ "$TODO_DONE" -gt 0 ]; then
+    echo "WARNING: TODO.md contains completed items. Move them to completed/ directory."
+    EXIT_CODE=1
+  else
+    echo "TODO.md is active-only."
+  fi
+fi
+echo
+
+# 4. Placeholder check
+echo "--- Placeholder Check ---"
+PLACEHOLDERS=$(grep -rn '{{' "$STATE_DIR"/*.md 2>/dev/null | grep -v 'PLACEHOLDER\|template' || true)
+if [ -n "$PLACEHOLDERS" ]; then
+  echo "FOUND unfilled placeholders:"
+  echo "$PLACEHOLDERS" | head -10
+  echo
+  EXIT_CODE=1
+else
+  echo "No unfilled placeholders found."
+fi
+echo
+
+echo "=== Audit Complete (exit=$EXIT_CODE) ==="
+exit $EXIT_CODE
+```
+
+### What the audit checks
+
+<Accordion title="Broken path references">
+Scans all `.md` files for references that contain `continuity/` — a pattern that indicates the file was copied from the repository without updating internal paths to match the deployment location.
+</Accordion>
+
+<Accordion title="Required file existence">
+Checks that the five required files are present: `AGENTS.md`, `STATE.md`, `TODO.md`, `INIT.md`, and `SNAPSHOT.md`. Reports optional files (`MEMORY.md`, `PLAN.md`, `LEARNINGS.md`, `WARNING.md`, `CHECKPOINT.md`) as informational warnings if absent. Also verifies that `completed/` and `snapshots/` directories exist.
+</Accordion>
+
+<Accordion title="TODO discipline">
+Warns if `TODO.md` contains markers for completed items (`## Done`, `DONE`, or strikethrough `~~`). Completed items should be moved to `completed/` — leaving them in `TODO.md` causes the active task list to grow unbounded.
+</Accordion>
+
+<Accordion title="Unfilled placeholder check">
+Scans all `.md` files for `{{` patterns that are not part of template documentation. Functionally equivalent to `check-placeholders.sh` but scoped to markdown files and integrated into the broader audit report.
+</Accordion>
+
+### Running the audit
+
+```bash
+bash skills/continuity/scripts/state-file-audit.sh /path/to/my-agent/
+# === State File Audit 2026-06-30T12:00:00Z ===
+# Workspace: /path/to/my-agent/
+#
+# --- Broken Path Check ---
+# No broken path references found.
+#
+# --- File Existence Check ---
+# All required files present.
+#
+# --- TODO Discipline Check ---
+# TODO.md is active-only.
+#
+# --- Placeholder Check ---
+# No unfilled placeholders found.
+#
+# === Audit Complete (exit=0) ===
+```
+
+<Tip>
+Run `state-file-audit.sh` at the start of each new session to catch drift before the agent boots. Because it is read-only, it is safe to run at any time — including inside a hook triggered by a `STATE.md` change.
+</Tip>

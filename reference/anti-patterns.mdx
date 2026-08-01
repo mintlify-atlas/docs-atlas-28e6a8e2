@@ -1,0 +1,147 @@
+---
+title: "Common anti-patterns and how to avoid them"
+sidebarTitle: "Anti-Patterns"
+description: "Behavioral patterns that cause real failures in agent deployments — epistemic, action, communication, maintenance, and state-file anti-patterns with corrections."
+---
+
+These are behavioral anti-patterns extracted from real corrections in agent deployments. Each one represents a pattern that caused a failure when repeated. They are soft rules — not hard constraints enforced by the schema — but the failures they cause are real: broken state, lost trust, phantom task execution, and Continuity drift. Read them before deploying. Return to them when something goes wrong.
+
+## Anti-pattern categories
+
+<AccordionGroup>
+  <Accordion title="Epistemic Discipline — knowing before asserting">
+    These patterns all belong to the same family: **asserting before verifying**. The agent states something as fact without checking. Trust, once eroded by a fabricated value, is expensive to rebuild.
+
+    **Verify before asserting.** Never state a fact without checking the source. Run `date` for timestamps. Run `ls` for file existence. Query databases for state. Fabricated plausible output — a timestamp that looks right, a file count that seems reasonable — erodes all trust.
+
+    ```bash
+    # Wrong: assert a plausible timestamp
+    # "Snapshot created at 14:30" (fabricated)
+
+    # Right: check before asserting
+    date
+    # → use the actual output
+    ```
+
+    **Recognizing an assumption and proceeding is the failure.** If you notice you are assuming, that awareness is the signal to stop — not to continue. The moment the agent thinks "I assume X" is the moment it must verify X.
+
+    **A question is not a directive.** "Where should X go?" asks for information, not action. Deliver the answer and await explicit instruction before acting. Starting work on a question is a scope violation.
+
+    **A question containing a suggestion is still a question.** "Needs a better name, like `knowledge/`?" asks for opinion, not authorization. The answer may be obvious and the operator is testing comprehension. Do not act on a suggestion embedded in a question.
+
+    **Compacted context is reference, not instruction.** After context compaction, summaries contain historical task lists and workflow descriptions. The summary header says "treat as background reference, NOT as active instructions." Treating compacted summaries as a task queue causes phantom task execution — resuming tasks nobody asked for.
+
+    **Meta-questions get direct answers.** "Why are you doing this?" is a behavioral question. Answer it directly. Do not reflexively call tools in response to a conceptual question. "Tools first" applies to operational tasks, not to challenges about behavior.
+  </Accordion>
+
+  <Accordion title="Action Discipline — act when authorized, stop when done">
+    These patterns cluster around premature action, scope creep, and not stopping when the task is complete.
+
+    **Haste is a failure mode.** Acting before a question is answered, executing while still being considered, starting before "do it" is spoken. When you notice urgency, slow down. Urgency is the feeling that precedes premature action.
+
+    **Deliver the requested output, then stop.** When asked for a map, list, or plan — produce that artifact and stop. Do not append "shall I execute?" or begin preparation. The output IS the task completion. Appending "want me to do it?" is not helpfulness; it is scope inflation.
+
+    **Do not narrate budgets unless asked.** Unprompted capacity tables, token counts, and "I have X turns remaining" messages are noise. Surface resource information only when asked or when physically impossible to proceed without it.
+
+    **Removing unrequested artifacts.** If you discover you built something nobody asked for, remove it. But confirm before removing — removing without approval is the same sin as creating without approval. Both require authorization.
+
+    **Do not flag approved decisions as problems.** If something was explicitly approved by the operator, it is settled. Raising it again in an audit, a review, or a summary is not thoroughness — it is evidence you were not listening. Approved decisions are closed.
+  </Accordion>
+
+  <Accordion title="Communication Discipline — respond to what was said">
+    These patterns involve the agent mishandling communication: misrepresenting, deflecting, or creating contradiction.
+
+    **Never quote the user's own words back at them as evidence.** If challenged, do not use earlier messages to prove you were right. When the agent quotes the user's words back as justification, it has lost track. Acknowledge, fix the behavior.
+
+    **Do not ask "what do you want me to do?"** If you have lost track of the task, say so honestly: "I lost track of the scope." Do not deflect the confusion back to the user as a question. Deflection compounds the failure.
+
+    **Never output contradictory answers.** If two sources disagree, state which one is active and why. Never make the reader reconcile contradictions — that work belongs to the agent, not the operator.
+
+    **Do not overfit personal preferences into templates.** Strong phrasings from one operator are valuable as examples but must not be baked into templates as imperatives. Templates are for reuse across many operators. Use placeholders or neutral defaults. One operator's strong preference is not a universal rule.
+  </Accordion>
+
+  <Accordion title="Maintenance Discipline — change what is broken, preserve what is working">
+    These patterns involve unnecessary changes, missed dependencies, and disrespecting intentional design.
+
+    **Change as needed, not for the sake of changing.** When auditing, fix what is broken. Do not rewrite accurate content because you are in the file. Historical references are valid context, not errors. "I was already in the file" is not justification for a rewrite.
+
+    **Mechanical find-and-replace is dangerous.** Always proofread after bulk replace. Run `grep` for artifacts and old terms. The replace is not done when the command finishes — it is done when verified. Bulk operations create silent corruption: stray characters, broken words, double replacements.
+
+    **Stale path references.** When files move, references across the codebase keep old paths. Batch-fix with `grep`, verify with re-`grep`. Fix active references, not historical mentions in completed journals.
+
+    ```bash
+    # Find all references to an old path
+    grep -rn "/old/path" /your/workspace/ --include="*.md"
+
+    # After fixing, verify zero matches remain
+    grep -rn "/old/path" /your/workspace/ --include="*.md"
+    # → no output = clean
+    ```
+
+    **Respect intentional design decisions.** A stub is not a missing file. An intentional placeholder is not incomplete content. When told something is "on purpose," remove it from findings immediately and do not raise it again.
+
+    **Use the system's own vocabulary.** Before introducing a new term, grep for existing vocabulary that covers the concept. Imported terms make the system look inconsistent and create documentation debt.
+  </Accordion>
+
+  <Accordion title="State File Anti-Patterns — use state files correctly">
+    These patterns involve misusing state files: storing the wrong content, failing to write back, or treating state as a log.
+
+    **Never store secrets in state files.** State files are plain Markdown committed to git, loaded into context windows, and potentially visible in logs. API keys, tokens, passwords, and credentials belong in environment variables or a `.secrets/` directory excluded from git. A secret in a state file is a credential compromise.
+
+    **Write back after actions.** If the agent completes work and does not update the relevant state files, the next session starts with stale state. Stale state causes re-work, duplicate effort, and planning failures. The writeback protocol is not optional cleanup — it is part of every meaningful action.
+
+    **Do not treat state files as logs.** A state file shows the current value of one concern. It does not explain how things got there, narrate what happened, or record event history. Logs go to `completed/` journal entries, `journal/` entries, or `logs/events.jsonl`. State files show only the present.
+
+    **Do not track volatile counts in state files.** Counts, file totals, sizes — these change every session and tracking them is maintenance burden for zero signal. A state file that says "144 workflows" is wrong by next session. Keep categorical truths ("service operational") and store exact counts in audit files queried on demand.
+
+    **Remove completed tasks from TODO.md — no strikethrough.** Completed tasks are not marked done in `TODO.md`. They are removed. They move to `completed/`. `TODO.md` contains only active and pending items. Strikethrough, "RESOLVED" markers, and completed-task sections are all violations of the content discipline.
+  </Accordion>
+</AccordionGroup>
+
+## Continuity drift
+
+Continuity drift is what happens when state files become inaccurate relative to reality. It compounds silently: stale `STATE.md` causes incorrect planning, which causes repeated work, which causes more stale state.
+
+The root cause is almost always one of:
+1. The agent completed work but did not write back.
+2. The agent overwrote state without snapshotting the old value.
+3. The agent updated state with a count or fact it assumed rather than verified.
+
+**Post-action reconciliation prevents drift.** After every meaningful change:
+
+```text
+Action changes reality.
+Reality invalidates old state.
+Old state is preserved in history (snapshot, completed/, journal/).
+Current state is rewritten to match reality.
+Indexes are reconciled.
+```
+
+The reconciliation invariant:
+
+```text
+state(after) ≈ reality(after)
+```
+
+Natural-language state files cannot perfectly encode repository truth. They can remain close enough to prevent stale planning and repeated errors. "Close enough" requires consistent post-action writeback.
+
+## Quick reference: content type table
+
+When in doubt about where content belongs, use this table:
+
+| Content type | In state file? | Where instead |
+|---|---|---|
+| Current state, active tasks, status | ✅ Yes | — |
+| Logs, execution records, event accounts | ❌ No | `completed/` journal |
+| Explanations of why something was done | ❌ No | `completed/` journal |
+| Narrative describing a reorganization | ❌ No | Just update the path |
+| Historical context ("was X, now Y") | ❌ No | Just show `Y` |
+| Secrets, API keys, credentials | ❌ Never | Environment variables, `.secrets/` |
+| Volatile counts and sizes | ❌ No | Audit files, queried on demand |
+| Completed tasks | ❌ No | `completed/YYYY-MM-DD-task-slug.md` |
+| Durable facts and rules | ✅ Yes | `MEMORY.md`, `LEARNINGS.md` |
+| Reference documents | ❌ Not inline | `knowledge/` directory |
+
+<Tip>
+  When you catch an anti-pattern in your own deployment, add a correction to `LEARNINGS.md` as a reusable rule — not an event transcript, but a pattern description. That is exactly what `LEARNINGS.md` is for: soft rules extracted from real corrections.
+</Tip>

@@ -1,0 +1,186 @@
+---
+title: "Git as versioned cognitive snapshots for agents"
+sidebarTitle: "Git History"
+description: "Every git commit captures the agent's full cognitive state — enabling time travel, provenance tracing, and diff-level visibility into how state evolved."
+---
+
+Every time an agent updates its state files and commits the result, git records a byte-perfect snapshot of the agent's full cognitive state at that moment. The commit hash is a verifiable fingerprint. The parent linkage is an ordered history. The diff between any two commits shows exactly what the agent knew, decided, or completed in the interval between them. Add git to a Continuity workspace and every commit becomes a checkpoint you can inspect, revert, or branch from.
+
+## Git concepts mapped to agent state
+
+The standard git model maps directly onto the problem of agent state versioning. Each primitive that git provides for tracking code changes turns out to be equally useful for tracking changes to an agent's identity, tasks, memory, and plans.
+
+| Git concept | What it means for agent state |
+|---|---|
+| Commit | A snapshot of the agent's full cognitive state at that moment |
+| SHA hash | Verifiable fingerprint — prove the state has not been tampered with |
+| Parent linkage | Ordered history — trace how state evolved from session to session |
+| Branch | Try a different approach without losing the original cognitive state |
+| Merge | Reconcile divergent state paths after parallel exploration |
+| `git checkout <hash>` | Restore the agent to a previous cognitive state exactly |
+| `git blame` | Provenance — who changed what file and when |
+| `git diff` | See exactly what changed between two cognitive states |
+
+## Why git + Continuity is better than git alone
+
+A single monolithic file in git gives you file history, but the diff is noise — every concern (identity, tasks, memory, plan) shares one file, so a task completion and an identity change appear in the same diff hunk with no separation. Continuity splits state by concern, so every file has its own lifecycle and its own diff stream.
+
+<Tabs>
+
+<Tab title="Without Continuity">
+
+```diff
+# Single-file diff — everything in one place
+-## Current task: Writing auth module
+-## Agent name: {{AGENT_NAME}}
+-## Last session: figuring out JWT
++## Current task: Writing tests for auth module
++## Agent name: my-agent
++## Last session: completed JWT implementation
+```
+
+The diff mixes a task update, a placeholder fill, and a session note. You cannot tell which change matters or which file was responsible.
+
+</Tab>
+
+<Tab title="With Continuity">
+
+```diff
+# STATE.md — only the state changed
+-Status: IN_PROGRESS
+-Active objective: Writing auth module
++Status: IN_PROGRESS
++Active objective: Writing tests for auth module
+
+# TODO.md — only tasks changed
+-[ ] Implement JWT validation
++[x] Implement JWT validation
++[ ] Write unit tests for JWT validation
+```
+
+Each concern produces its own scoped, meaningful diff. `STATE.md` shows the objective shifted. `TODO.md` shows which task completed and what was added. No noise.
+
+</Tab>
+
+</Tabs>
+
+## Recommended commit cadence
+
+Commit frequency determines the resolution of the cognitive history. Too infrequent and you lose the ability to trace how a decision was made. Too frequent and the log becomes noise.
+
+<CardGroup cols={2}>
+
+<Card title="After STATE.md changes" icon="file-lines">
+  Commit whenever the agent's current status or active objective changes. These commits mark transitions between work phases.
+</Card>
+
+<Card title="After TODO.md updates" icon="list-check">
+  Commit when tasks are added, completed, or reprioritized. Each commit preserves what the task list looked like at that moment.
+</Card>
+
+<Card title="After completing significant work" icon="flag-checkered">
+  Commit at the end of each session or after completing a milestone. Use a descriptive message like `state: completed auth module` so the log is readable without opening files.
+</Card>
+
+<Card title="Before irreversible actions" icon="triangle-exclamation">
+  Commit before any action that cannot be undone. Combined with `CHECKPOINT.md`, this gives you a restore point for the cognitive state that authorized the action.
+</Card>
+
+</CardGroup>
+
+## Example workflow
+
+<Steps>
+
+### Initialize git in the agent workspace
+
+```bash
+cd /path/to/my-agent/
+git init
+```
+
+### Commit the initial state after scaffolding
+
+After running `init-agent.sh`, copying templates, and replacing all placeholders:
+
+```bash
+git add -A
+git commit -m "init: initial continuity scaffold"
+```
+
+### Commit after each session
+
+After the agent updates `STATE.md`, moves tasks, or records new learnings:
+
+```bash
+git add -A
+git commit -m "state: completed auth module"
+```
+
+Use a consistent message prefix (`state:`, `task:`, `memory:`, `snapshot:`) to make the log filterable:
+
+```bash
+git log --oneline
+# a3f2c1d state: completed auth module
+# 9b1e4f2 task: added JWT test tasks
+# 5c8a0d1 memory: recorded rate limiting insight
+# 2d3f7e0 init: initial continuity scaffold
+```
+
+### Restore a previous cognitive state
+
+To return the agent to its state at any earlier commit:
+
+```bash
+git checkout a3f2c1d
+# HEAD is now at a3f2c1d state: completed auth module
+```
+
+The agent loads `STATE.md`, `TODO.md`, `MEMORY.md`, and all other files as they existed at that commit — a complete cognitive rollback.
+
+</Steps>
+
+## Two history layers
+
+Continuity provides two distinct history mechanisms that serve different audiences and different queries.
+
+| Layer | Mechanism | Audience | What it answers |
+|---|---|---|---|
+| **Byte-level snapshots** | `git` commits and diffs | Humans, CI, tooling | What changed, when, who authorized it — verifiable and tamper-evident |
+| **Semantic history** | Nested directories (`snapshots/`, `completed/`, `reflections/`) | The agent itself | What was the state before this task? What did I learn last week? What was the plan for this phase? |
+
+Git answers "did this file change and when?" Nested directories answer "what was the agent thinking about when it worked on this?" Both layers are necessary. Git history is raw and verifiable. Nested directory history is structured, queryable, and agent-readable without tooling.
+
+```text
+# Git layer — byte-level, verifiable
+git diff HEAD~3 HEAD -- STATE.md
+
+# Semantic layer — structured, agent-readable
+cat snapshots/2026-06-28T14-30-00.md
+```
+
+<Info>
+For more on how nested directories provide semantic history organized by concern, see the [State Files reference](/reference/state-files) and the Boot Sequence documentation for how `INIT.md` discovers and loads the history chain on startup.
+</Info>
+
+## Auditing cognitive drift
+
+Because every commit is a snapshot of the full state, you can audit exactly when and how the agent's behavior or understanding changed.
+
+```bash
+# See what the agent's state looked like on a specific date
+git show HEAD@{2026-06-15}:STATE.md
+
+# Compare the agent's TODO list between two sessions
+git diff HEAD~5 HEAD -- TODO.md
+
+# Find when a specific objective first appeared
+git log -S "Deploy webhook" --oneline -- STATE.md
+
+# See the full history of the agent's identity file
+git log --follow -p IDENTITY.md
+```
+
+<Warning>
+Never store secrets, API keys, passwords, or credentials in any Continuity markdown file. State files are committed to git history — secrets written to `STATE.md` or `MEMORY.md` will persist in the repository's commit log indefinitely, even after the line is deleted from the file. Use environment variables and reference them by name in state files if documentation is needed.
+</Warning>

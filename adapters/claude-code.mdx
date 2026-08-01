@@ -1,0 +1,145 @@
+---
+title: "Using Continuity with Claude Code (CLAUDE.md)"
+sidebarTitle: "Claude Code"
+description: "Claude Code auto-loads CLAUDE.md from the project root. Use it as the Continuity entry file to declare load order and state governance."
+---
+
+Claude Code reads `CLAUDE.md` automatically from the project root on every turn, and also discovers nested `CLAUDE.md` files in subdirectories as the agent moves through a project. This makes it the natural entry point for Continuity: place your boot instructions, state chain declarations, and load order in `CLAUDE.md` and Claude Code enforces them by self-reference — the file declares what state exists, and the agent follows its own specification as it runs.
+
+## Setup
+
+<Steps>
+  <Step title="Copy Continuity templates to your workspace">
+    Copy the files matching your chosen tier from the Continuity repo into your project root. The Minimum tier is enough to start:
+
+    ```bash
+    cp continuity/{AGENTS,IDENTITY,SELF,SOUL,STATE,INIT,TODO,SNAPSHOT}.md /your/workspace/
+    ```
+
+    Replace all `{{UPPER_CASE}}` placeholders with your agent's actual values before booting.
+  </Step>
+  <Step title="Create or configure CLAUDE.md as the entry file">
+    Claude Code does **not** auto-load `AGENTS.md` — it only loads `CLAUDE.md`. You have two options:
+
+    **Option A — Rename:** Rename the pack's `AGENTS.md` to `CLAUDE.md`. This makes `CLAUDE.md` the single authoritative entry file.
+
+    **Option B — Delegate:** Keep `AGENTS.md` and create a minimal `CLAUDE.md` that delegates to it:
+
+    ```markdown
+    # CLAUDE.md
+    Read AGENTS.md and follow its boot instructions.
+    ```
+
+    Either approach works. Option A is simpler for new workspaces. Option B is useful when you share a workspace with runtimes that auto-load `AGENTS.md` (Codex, Hermes, OpenClaw).
+  </Step>
+  <Step title="Declare the load order in CLAUDE.md">
+    `CLAUDE.md` should declare which state files to load on boot and in what order. A minimal declaration looks like this:
+
+    ```markdown
+    # CLAUDE.md
+
+    ## Boot sequence
+    On every session, load in order:
+    1. IDENTITY.md — who I am
+    2. STATE.md — current project truth
+    3. TODO.md — active task queue
+    4. SNAPSHOT.md — last known good state
+
+    Read STATE.md before acting.
+    After meaningful work, update STATE.md, TODO.md, and SNAPSHOT.md.
+    ```
+
+    You can extend the load order as your agent's loop grows — add `MEMORY.md`, `TOOLS.md`, `PLAN.md`, or any file your loop actually needs. Load only what the current task requires; do not load everything on every turn.
+  </Step>
+  <Step title="Replace placeholders and run INIT.md on first boot">
+    Search for any remaining `{{UPPER_CASE}}` markers across all copied files and fill them in. Then prompt Claude Code to run the `INIT.md` reconstitution procedure:
+
+    ```
+    Run the INIT.md protocol. Read STATE.md and TODO.md. If READY, proceed with the next valid action.
+    ```
+
+    `INIT.md` runs nine stages: preflight, inspect, scan, load, reconcile, discover, validate, declare, and snapshot. It creates any missing files and emits `READY` when the state chain is valid.
+  </Step>
+</Steps>
+
+## Writeback contract
+
+Claude Code can read and write files directly. After completing meaningful work, the agent must update the state files whose claims are no longer accurate. The minimum writeback set is:
+
+| File | What to update |
+|---|---|
+| `STATE.md` | New operational truth — what IS now |
+| `TODO.md` | Mark completed items; add new tasks |
+| `SNAPSHOT.md` | Refresh the restoration anchor |
+| `completed/` | Move done tasks here with evidence |
+
+For larger changes, also update:
+
+- `LEARNINGS.md` — if new insights emerged during the session
+- `MEMORY.md` / `memory/` — if durable facts changed
+- `PLAN.md` — if the intended sequence shifted
+- `snapshots/` — if STATE.md was overwritten (preserve old value first)
+
+<Warning>
+  Do not preserve stale state for politeness. If reality changed during a session, the state files must reflect that change before the session ends. Stale state causes the next session to boot with incorrect context.
+</Warning>
+
+## Auto-injection with AGENTS.promptinclude.md
+
+Claude Code supports auto-injection: files listed in `AGENTS.promptinclude.md` are pulled into the context on every session without manual loading. Use this to ensure critical state files are always available:
+
+```markdown
+# AGENTS.promptinclude.md
+
+# Required tier (auto-loaded every session)
+@AGENTS.md
+@IDENTITY.md
+@SOUL.md
+@STATE.md
+@TODO.md
+@SNAPSHOT.md
+
+# Recommended tier (uncomment to enable)
+# @MEMORY.md
+# @TOOLS.md
+# @PLAN.md
+```
+
+<Tip>
+  Keep the auto-injected set small. Only include files the agent genuinely needs on every turn. Files that are only relevant for specific tasks should be loaded on demand, not auto-injected — your context budget is finite.
+</Tip>
+
+## Nested workspace example
+
+All Continuity files can be nested into project subdirectories. Claude Code discovers nested `CLAUDE.md` files as the agent descends into subdirectories, building a scoped state chain:
+
+```text
+/my-project
+  CLAUDE.md          ← global identity and load order
+  STATE.md           ← "Current: Building auth system"
+  TODO.md            ← high-level task queue
+
+  /backend
+    CLAUDE.md        ← backend-scoped boot instructions
+    STATE.md         ← "Current: Refactoring JWT handler"
+    TODO.md          ← backend tasks
+
+    /auth
+      STATE.md       ← "Current: Writing token rotation tests"
+```
+
+When Claude Code works inside `/backend/auth/`, it loads the full chain from root to the active scope:
+
+1. `/CLAUDE.md` — global identity
+2. `/STATE.md` — project status
+3. `/backend/CLAUDE.md` — backend-scoped instructions
+4. `/backend/STATE.md` — subsystem status
+5. `/backend/auth/STATE.md` — current task context
+
+Child state files refine scope and add local detail. They cannot weaken safety rules or authority boundaries declared by parent files.
+
+## CLAUDE.md vs AGENTS.md
+
+<Note>
+  Either `CLAUDE.md` or `AGENTS.md` can serve as the Continuity entry file — the system does not prescribe which one. The only constraint is that the file must be the one your runtime auto-loads or is pointed to explicitly. If you share a workspace across multiple runtimes (e.g., Claude Code and Codex), the Option B delegation pattern — a `CLAUDE.md` that reads `AGENTS.md` — lets you maintain a single authoritative entry file while satisfying both runtimes' auto-load conventions.
+</Note>

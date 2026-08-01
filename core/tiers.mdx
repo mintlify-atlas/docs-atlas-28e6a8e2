@@ -1,0 +1,156 @@
+---
+title: "Deployment tiers: from Minimum to Advanced"
+sidebarTitle: "Tiers"
+description: "Choose the right starting tier for your agent — Minimum, Standard, Full, or Advanced — and learn when to add more files."
+---
+
+Continuity's tiers are suggested starting templates, not requirements. They exist because different agents need different amounts of state — a simple task-runner needs almost nothing; a recursive multi-agent orchestrator needs the full inventory. Pick the smallest tier that gives your agent the continuity it actually requires, then add files only when your loop genuinely needs them.
+
+## The four tiers
+
+| Tier | File count | For |
+|------|-----------|-----|
+| **Minimum** | 8 files | Simple agents with a single focused loop |
+| **Standard** | 16 files | Most agents — adds memory, tools, planning |
+| **Full** | 27 files | Operational agents with runtime discipline |
+| **Advanced** | 30 files | Recursive multi-agent systems |
+
+---
+
+## Minimum
+
+The smallest configuration that produces a functional agent with persistent identity and task tracking. An agent booted on Minimum files can declare READY, remember who it is, and maintain a task list across sessions.
+
+**Files:** `AGENTS`, `IDENTITY`, `SELF`, `SOUL`, `STATE`, `INIT`, `TODO`, `SNAPSHOT`
+
+```bash
+cp continuity/{AGENTS,IDENTITY,SELF,SOUL,STATE,INIT,TODO,SNAPSHOT}.md /your/workspace/
+```
+
+**What this gives you:**
+- `AGENTS.md` — bootloader, runtime parameters, project guard
+- `IDENTITY.md` + `SOUL.md` + `SELF.md` — full identity stack (who, why, how)
+- `STATE.md` — current operational truth
+- `INIT.md` — 9-stage reconstitution procedure
+- `TODO.md` — task index
+- `SNAPSHOT.md` — restoration anchor
+
+**What this omits:**
+No user model, no memory, no tools inventory, no planning layer, no safety gates, no heartbeat. For simple agents where none of those are needed, Minimum is the right choice.
+
+---
+
+## Standard
+
+The practical default for most agents. Adds the user model, memory, tools awareness, planning, and a learning layer on top of Minimum.
+
+**Files:** everything in Minimum, plus `USER`, `MEMORY`, `TOOLS`, `PLAN`, `CONTEXT`, `TASKS`, `LEARNINGS`, `HEARTBEAT`
+
+```bash
+cp continuity/{AGENTS,IDENTITY,SELF,SOUL,STATE,INIT,TODO,SNAPSHOT}.md /your/workspace/
+cp continuity/{USER,MEMORY,TOOLS,PLAN,CONTEXT,TASKS,LEARNINGS,HEARTBEAT}.md /your/workspace/
+```
+
+**What the new files add:**
+- `USER.md` — model of the human operator; the agent adapts to the person it serves
+- `MEMORY.md` — current memories and index to `memory/` entries
+- `TOOLS.md` — capability registry and environment notes
+- `PLAN.md` — intended sequence, phases, milestones (indexes `proposals/`)
+- `CONTEXT.md` — per-turn operational snapshot (indexes `journal/`)
+- `TASKS.md` — system and housekeeping tasks separate from project work
+- `LEARNINGS.md` — soft rules and insights from prior sessions
+- `HEARTBEAT.md` — periodic check protocol
+
+Standard is the right choice when the agent needs to remember facts across sessions, maintain a tool inventory, or follow a multi-phase plan.
+
+---
+
+## Full
+
+For agents operating in production environments with runtime discipline, safety constraints, and a broader capability surface. Adds infrastructure awareness, context budget management, safety gates, and a full boot/bootstrap path.
+
+**Files:** everything in Standard, plus `INFRASTRUCTURE`, `POTENTIAL`, `CONTEXT_BUDGET`, `MISSIONS`, `BACKLOG`, `WARNING`, `BOOTSTRAP`, `KNOWLEDGE`, `EVENTS`, `ARTIFACTS`, `BOOT`
+
+```bash
+cp continuity/{AGENTS,IDENTITY,SELF,SOUL,STATE,INIT,TODO,SNAPSHOT}.md /your/workspace/
+cp continuity/{USER,MEMORY,TOOLS,PLAN,CONTEXT,TASKS,LEARNINGS,HEARTBEAT}.md /your/workspace/
+cp continuity/{INFRASTRUCTURE,POTENTIAL,CONTEXT_BUDGET,MISSIONS,BACKLOG,WARNING,BOOTSTRAP,KNOWLEDGE,EVENTS,ARTIFACTS,BOOT}.md /your/workspace/
+```
+
+**What the new files add:**
+- `INFRASTRUCTURE.md` — live substrate inventory (services, endpoints)
+- `POTENTIAL.md` — Structure / Potential / Void capability model
+- `CONTEXT_BUDGET.md` — prompt hygiene rules and context limits
+- `MISSIONS.md` — high-level priorities above the task layer
+- `BACKLOG.md` — rolling inbox for pre-triage items
+- `WARNING.md` — hard limits and pre-action checklist
+- `BOOTSTRAP.md` — first-run identity discovery (self-destructing)
+- `KNOWLEDGE.md` — catalog of knowledge documents (indexes `knowledge/`)
+- `EVENTS.md` — recent event summary (indexes `logs/`)
+- `ARTIFACTS.md` — generated artifact inventory (indexes `artifacts/`)
+- `BOOT.md` — lightweight CHECK → ACT → REPORT cycle for heartbeats
+
+Full is the right choice for agents that manage infrastructure, generate artifacts, operate under safety constraints, or need to manage a large context budget across many files.
+
+---
+
+## Advanced
+
+For recursive multi-agent systems where one agent spawns and manages sub-agents with bounded delegated authority. Adds the approval gate, action reference, and machine-readable binding contract.
+
+**Files:** everything in Full, plus `CHECKPOINT`, `AGENT_ACTIONS`, `BINDING.schema.json`
+
+```bash
+cp continuity/{AGENTS,IDENTITY,SELF,SOUL,STATE,INIT,TODO,SNAPSHOT}.md /your/workspace/
+cp continuity/{USER,MEMORY,TOOLS,PLAN,CONTEXT,TASKS,LEARNINGS,HEARTBEAT}.md /your/workspace/
+cp continuity/{INFRASTRUCTURE,POTENTIAL,CONTEXT_BUDGET,MISSIONS,BACKLOG,WARNING,BOOTSTRAP,KNOWLEDGE,EVENTS,ARTIFACTS,BOOT}.md /your/workspace/
+cp continuity/{CHECKPOINT,AGENT_ACTIONS}.md continuity/BINDING.schema.json /your/workspace/
+```
+
+**What the new files add:**
+- `CHECKPOINT.md` — approval gate before irreversible actions
+- `AGENT_ACTIONS.md` — conceptual action reference for the recursive runtime
+- `BINDING.schema.json` — machine-readable binding contract; validates that declared mesh edges match the actual directory structure
+
+Advanced is only needed for orchestrators that delegate work to sub-agents and need machine-verifiable authorization boundaries.
+
+---
+
+## Guidance: when to add a file
+
+The tier table is a starting point — the real rule is simpler:
+
+> Add a file only when your agent's loop repeatedly reaches for state it doesn't have.
+
+If the agent is frequently re-discovering the same facts, add `MEMORY.md`. If it keeps losing track of which tools are available, add `TOOLS.md`. If it's making irreversible operations without human review, add `WARNING.md` and `CHECKPOINT.md`. If it never needs to plan across multiple phases, leave `PLAN.md` out.
+
+<Warning>
+**30+ files is heavy. Most agents need 3–5.**
+
+The full template set exists because different loop types need different state shapes — a coding loop, a research loop, and a multi-agent orchestration loop each have different continuity needs. The templates are loop patterns, not bloat. Start with `AGENTS.md` + `TODO.md` + `STATE.md` and add files only when your agent's loop actually needs them.
+</Warning>
+
+---
+
+## Sample configurations
+
+The `samples/` directory contains concrete, pre-configured setups for common agent types — a minimal coding agent, a standard research agent, and a full operational agent. These are real configurations, not just tier descriptions.
+
+<CardGroup cols={2}>
+  <Card title="samples/minimum/" href="/packs/overview">
+    Simple coding agent — 8 files: identity, boot, and task tracking only.
+  </Card>
+  <Card title="samples/standard/" href="/packs/overview">
+    Research agent — 14 files: adds soul, user model, memory, tools, and planning.
+  </Card>
+  <Card title="samples/full/" href="/packs/overview">
+    Operational agent — 25 files: adds learnings, heartbeat, knowledge, events, artifacts, safety, and boot.
+  </Card>
+  <Card title="Packs overview" href="/packs/overview">
+    Domain-specific packs — developer, backend, researcher, judge, ops, orchestrator, and more.
+  </Card>
+</CardGroup>
+
+<Tip>
+Copy a sample, fill in the `{{PLACEHOLDER}}` values, delete the files that don't apply to your use case, and boot. Samples are starting points, not fixed identities.
+</Tip>

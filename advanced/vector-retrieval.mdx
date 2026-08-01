@@ -1,0 +1,137 @@
+---
+title: "Vector retrieval and schema-validated mesh at scale"
+sidebarTitle: "Vector Retrieval"
+description: "Optional extensions for semantic search across state files, schema-validated mesh edges, and the structured memory store that supports both delivery modes."
+---
+
+The core CONTINUITY system — hierarchy, mesh, Git provenance, hooks — works without any specialized infrastructure. For teams operating at scale, two optional extensions unlock capabilities that plain file reads cannot provide: vector retrieval for semantic search across large state histories, and schema validation for machine-readable mesh edges. Neither is required. Both become valuable at specific thresholds. This page describes how each extension works, when to add it, and how the `memory/` directory underpins both.
+
+## Vector stores
+
+When state history grows beyond what an agent can load in a single context window, semantic search becomes the practical alternative to exhaustive file reads. Vector stores let agents query meaning rather than filenames.
+
+State files are embedded with an embedding model and stored in a vector database. The agent queries by intent — "what did we learn about rate limiting?" — rather than by path. The vector store returns the most relevant entries from across all sessions, projects, and snapshots.
+
+| Capability | How it works |
+|------------|--------------|
+| **Semantic search** | State files are embedded and stored in a vector DB; queries return matches by meaning, not filename |
+| **History recall** | Search across `snapshots/`, `audits/`, and `completed/` entries by content — find what the agent knew on a specific date without scanning every file |
+| **Auto re-embed** | Hooks fire on `STATE.md`, `TODO.md`, or `SNAPSHOT.md` changes and trigger re-embedding of updated files, keeping the vector index current |
+| **Cross-project retrieval** | Multiple agents sharing a state directory can find relevant context without reading every file in the directory |
+
+### When to add vector retrieval
+
+<Steps>
+  <Step title="State history exceeds context">
+    When the combined size of your `snapshots/`, `audits/`, and `completed/` directories exceeds what an agent can load in a single context window, semantic search becomes necessary. Without it, the agent either loads too much (context overflow) or loads too little (stale planning).
+  </Step>
+  <Step title="Semantic recall is needed">
+    When an agent needs to answer questions like "what have we learned about this subsystem?" across many sessions, keyword search over filenames is not sufficient. Embedding-based retrieval surfaces relevant context by meaning.
+  </Step>
+  <Step title="Multiple agents share a state directory">
+    When several agents write to the same `memory/` or `knowledge/` directories and each needs to discover what others have contributed, semantic search is more reliable than relying on `INDEX.md` staying perfectly current.
+  </Step>
+</Steps>
+
+## Schema-validated mesh
+
+The mesh is explicit by design: every edge is declared in a `## Mesh index` section. For small meshes, human review is sufficient. For meshes with many edges — multiple agents writing shared directories, CI pipelines that must catch regressions — a three-layer validation pattern makes the mesh machine-readable.
+
+| Layer | File | Role |
+|-------|------|------|
+| **Canonical graph** | `SCHEMA.lua` | Machine-readable mesh graph — all edges, dependencies, and ownership declarations in one queryable file |
+| **Per-file metadata** | YAML frontmatter | Owner, scope, parent, index declarations, and write rules embedded directly in each `.md` file |
+| **Validator** | `schema_validate.py` | Bridge that checks both layers agree — detects drift between declared edges and actual directory structure, flags dangling edges and ownerless files |
+
+With this pattern, the mesh is both human-readable (markdown prose in `## Mesh index` sections) and machine-readable (schema graph + YAML frontmatter + validator). Relationships, dependencies, and reconciliation triggers become queryable in CI.
+
+### When to add schema validation
+
+<Steps>
+  <Step title="Mesh has many edges">
+    When your mesh has enough declared edges that manual tracking is error-prone — a rough threshold is more than a dozen distinct indexer-to-directory relationships — the validator catches drift that humans miss.
+  </Step>
+  <Step title="Multiple agents write shared directories">
+    When more than one agent can write to `memory/`, `artifacts/`, or `audits/`, ownership boundaries need enforcement. YAML frontmatter in each entry declares its owner; the validator confirms every entry has a declared owner that matches the schema graph.
+  </Step>
+  <Step title="CI checks are needed">
+    When you want pull request checks or deployment gates that catch dangling edges (a state file declares an index to a directory that does not exist) and schema drift (the canonical graph disagrees with per-file frontmatter) before they reach production.
+  </Step>
+</Steps>
+
+## Memory store structure
+
+The `memory/` directory is the Library-class store that underpins both vector retrieval and schema validation. It is structured for both human navigation and machine querying:
+
+```text
+memory/
+├── INDEX.md          # Manifest — all entries organized by namespace, with UIDs, paths, confidence, and update dates
+├── SCHEMA.md         # Schema definition — full YAML frontmatter spec for memory entries
+└── entries/          # Structured entries with YAML frontmatter
+    └── YYYY-MM-DD-namespace-tag-description.md
+```
+
+Each entry in `entries/` carries YAML frontmatter that makes it queryable by namespace, topic, confidence, retention policy, and update date:
+
+```yaml
+---
+uid: mem-semantic-server-ip
+namespace: semantic
+topic: Production server IP address
+tags: [infrastructure, networking]
+source: ops/infrastructure-audit-2026-06-15.md
+confidence: 0.97
+created: 2026-06-15
+updated: 2026-06-29
+retention: permanent
+---
+```
+
+`INDEX.md` organizes all entries into four namespace tables — semantic, procedural, episodic, and working — each row carrying the UID, topic, path, confidence score, and last update date. `SCHEMA.md` defines the full frontmatter specification and the four namespaces, and documents the trust tiers used to qualify confidence scores.
+
+### Memory namespaces
+
+| Namespace | Purpose | Example |
+|-----------|---------|---------|
+| `semantic` | Durable facts that do not change frequently | "Production server IP is 192.0.2.1" |
+| `procedural` | Reusable methods and runbooks | "How to deploy a service via Caddy" |
+| `episodic` | Important events and milestones | "Auth transfer completed 2026-06-16" |
+| `working` | Temporary context for the current task | "Current task: fix webhook rate limiting" |
+
+## Two memory delivery types
+
+Memory entries are delivered to the agent in one of two modes. The mode is declared per-entry and determines when the content reaches the agent's context window:
+
+<CardGroup cols={2}>
+  <Card title="Latent (auto-inject on boot)">
+    Entries marked `latent` are injected automatically when the agent boots. They load without an explicit query — the agent wakes up already knowing them. Use for high-confidence, high-frequency facts: identity, hard limits, durable infrastructure state. Keep the latent set small enough to fit inside the auto-load budget defined in `CONTEXT_BUDGET.md`.
+  </Card>
+  <Card title="Working (search on demand)">
+    Entries marked `working` are retrieved only when the agent issues a search query against the vector store or the `INDEX.md` manifest. They never auto-load. Use for the long tail of episodic events, procedural runbooks, and project-specific facts that are needed occasionally but not every session.
+  </Card>
+</CardGroup>
+
+<Tip>
+  The `working` namespace in SCHEMA.md corresponds to the working delivery type. Entries in the `working` namespace are temporary — they should be reviewed and either promoted to `semantic`/`procedural`/`episodic` or archived. The weekly surveillance routine in `SCHEMA.md` flags `working` entries older than 30 days for review.
+</Tip>
+
+## These are optional extensions
+
+<Note>
+  Vector retrieval and schema-validated mesh are optional. The core system — nesting, mesh declarations, Git provenance, and hooks — operates entirely on plain markdown files without any database or validator. Add these extensions when your state history exceeds context capacity, when semantic recall becomes necessary, or when CI enforcement of mesh edges is worth the setup cost. Most agents running at Standard or Full tier will never need them.
+</Note>
+
+<CardGroup cols={2}>
+  <Card title="Mesh" href="/advanced/mesh">
+    The mesh model that schema validation formalizes — how edges are declared and why they matter.
+  </Card>
+  <Card title="Runtime Contracts" href="/advanced/runtime-contracts">
+    BINDING.schema.json and how it machine-validates the mesh for recursive agents.
+  </Card>
+  <Card title="Hooks" href="/operations/hooks">
+    How to wire auto-re-embed triggers to fire when state files change.
+  </Card>
+  <Card title="Ontology" href="/core/ontology">
+    State, History, and Library classes — the taxonomy that governs what can be embedded and how.
+  </Card>
+</CardGroup>

@@ -1,0 +1,118 @@
+---
+title: "File reference: every Continuity file explained"
+sidebarTitle: "Overview"
+description: "A complete guide to every file and directory in Continuity — what each one is, where it lives, who owns it, and when to update it."
+---
+
+This section documents every file and directory in the Continuity system. Whether you are setting up a new agent, auditing an existing workspace, or trying to understand how state flows between files, this is the place to start. Files are organized into three classes — State, History, and Library — each with distinct mutability rules. The pages below cover each class in depth, plus the binding schema, template placeholders, and common anti-patterns.
+
+## The three-class ontology
+
+Every file in Continuity belongs to exactly one class. The class determines where the file lives, how it changes over time, and what question it answers.
+
+| Class | Where | Mutability | What it answers |
+|-------|-------|------------|-----------------|
+| **State** | Root `.md` files | Overwrite in place | What IS right now |
+| **History** | Nested dirs — append-only | Append, never modify old entries | What WAS at a point in time |
+| **Library** | Nested dirs — curated | Add, update, or remove as facts change | What is KNOWN |
+
+State holds one current value per concern. When a state file is overwritten, the old version is preserved in its paired history directory — no data is lost. History is time-bound and grows monotonically; old entries are never touched. Library is timeless and curated; facts can be corrected or retired.
+
+## State files — quick reference
+
+| File | Cluster | Purpose |
+|------|---------|---------|
+| `IDENTITY.md` | Identity | Instance identity, relationships, rebinding policy |
+| `SOUL.md` | Identity | Essence, purpose, philosophy, constitution |
+| `SELF.md` | Identity | Operating model, voice, hard invariants |
+| `USER.md` | Identity | Human / operator model |
+| `INIT.md` | Boot | 9-stage reconstitution procedure |
+| `AGENTS.md` | Boot | Bootloader, runtime params, project guard |
+| `BOOT.md` | Boot | Optional lightweight every-wake cycle |
+| `BOOTSTRAP.md` | Boot | First-run identity discovery (self-destructing) |
+| `STATE.md` | State | Current operational truth |
+| `CONTEXT.md` | State | Per-turn operational snapshot |
+| `PLAN.md` | State | Intended sequence, phases, milestones |
+| `TODO.md` | State | Tactical task index |
+| `TASKS.md` | State | System and housekeeping tasks |
+| `SNAPSHOT.md` | State | Restoration anchor |
+| `MEMORY.md` | Memory | Current memories and index to entries |
+| `KNOWLEDGE.md` | Memory | Catalog of knowledge documents |
+| `LEARNINGS.md` | Memory | Soft rules, insights gained |
+| `TOOLS.md` | Capability | Capability registry, environment notes |
+| `INFRASTRUCTURE.md` | Capability | Live substrate inventory |
+| `POTENTIAL.md` | Capability | Structure / potential / void model |
+| `CONTEXT_BUDGET.md` | Capability | Prompt hygiene and context limits |
+| `EVENTS.md` | Capability | Recent event summary |
+| `ARTIFACTS.md` | Capability | Generated artifact inventory |
+| `WARNING.md` | Safety | Hard limits, pre-action checklist |
+| `CHECKPOINT.md` | Safety | Approval gate before irreversible actions |
+| `AGENT_ACTIONS.md` | Runtime | Action reference (conceptual) |
+| `BINDING.schema.json` | Runtime | Machine-readable binding contract |
+
+## History directories — quick reference
+
+| Directory | Naming pattern | Indexed by |
+|-----------|---------------|------------|
+| `completed/` | `YYYY-MM-DD-task-slug.md` | `TODO.md` |
+| `journal/` | `YYYY-MM-DD-turn-N.md` | `CONTEXT.md` |
+| `reflections/` | `YYYY-MM-DD-topic-slug.md` | `LEARNINGS.md` |
+| `snapshots/` | `YYYY-MM-DDTHH-MM-SS.md` | `STATE.md` |
+| `audits/` | `YYYY-MM-DD-type-slug.md` | `STATE.md`, `LEARNINGS.md` |
+| `proposals/` | `YYYY-MM-DD-topic-slug.md` | `PLAN.md` |
+| `setup/` | `YYYY-MM-DD-tool-name.md` | `TOOLS.md` |
+| `artifacts/` | `YYYY-MM-DD-name.ext` | `STATE.md`, `ARTIFACTS.md` |
+
+## Library directories — quick reference
+
+| Directory | Naming pattern | Indexed by |
+|-----------|---------------|------------|
+| `memory/` | `namespace-topic-slug.md` | `MEMORY.md` |
+| `knowledge/` | `topic-slug.md` | `KNOWLEDGE.md` |
+
+## Pages in this section
+
+<CardGroup cols={2}>
+  <Card
+    title="State Files"
+    icon="file-lines"
+    href="/reference/state-files"
+  >
+    All 27 root `.md` files — what each one holds, which cluster it belongs to, and when to update it.
+  </Card>
+  <Card
+    title="History Directories"
+    icon="clock-rotate-left"
+    href="/reference/history-directories"
+  >
+    The eight append-only directories that preserve everything that WAS — naming patterns, entry templates, and the never-modify rule.
+  </Card>
+  <Card
+    title="Library Directories"
+    icon="books"
+    href="/reference/library-directories"
+  >
+    The `memory/` and `knowledge/` curated stores — schema, namespaces, delivery types, and why they must stay separate.
+  </Card>
+  <Card
+    title="Binding Schema"
+    icon="file-code"
+    href="/reference/binding-schema"
+  >
+    `BINDING.schema.json` field-by-field — the machine-readable contract for Advanced-tier recursive agent delegation.
+  </Card>
+  <Card
+    title="Placeholders"
+    icon="brackets-curly"
+    href="/reference/placeholders"
+  >
+    Every `{{UPPER_CASE}}` template variable, example values, and the post-fill checklist.
+  </Card>
+  <Card
+    title="Anti-Patterns"
+    icon="triangle-exclamation"
+    href="/reference/anti-patterns"
+  >
+    Behavioral patterns that cause real failures — epistemic, action, communication, maintenance, and state-file anti-patterns.
+  </Card>
+</CardGroup>

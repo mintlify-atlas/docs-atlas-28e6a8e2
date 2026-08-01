@@ -1,0 +1,171 @@
+---
+title: "File clusters and their roles in Continuity"
+sidebarTitle: "File Clusters"
+description: "A tour of every file cluster in Continuity — Identity, Boot, State, Memory, Capability, Safety, and Runtime — and what each one does."
+---
+
+Continuity's files are grouped into seven clusters, each responsible for a distinct concern in the agent's lifecycle. A cluster is not a folder — it is a logical grouping of files that share a purpose. Understanding the clusters helps you decide which files your agent actually needs and which ones it can safely leave out.
+
+## Cluster overview
+
+| Cluster | Icon | Files | What it does |
+|---------|------|-------|--------------|
+| **Identity** | 🧬 | `IDENTITY.md`, `SOUL.md`, `SELF.md`, `USER.md` | Who the agent is, how it behaves, who it serves |
+| **Boot** | 🔄 | `INIT.md`, `AGENTS.md`, `BOOT.md`, `BOOTSTRAP.md` | How the agent starts up and reconstructs itself |
+| **State** | 📍 | `STATE.md`, `CONTEXT.md`, `PLAN.md`, `TODO.md`, `TASKS.md`, `SNAPSHOT.md` | Current truth, work tracking, restoration anchor |
+| **Memory** | 🧠 | `MEMORY.md`, `KNOWLEDGE.md`, `LEARNINGS.md` + `memory/`, `knowledge/` dirs | Durable facts, insights, knowledge library |
+| **Capability** | 🛠️ | `TOOLS.md`, `INFRASTRUCTURE.md`, `POTENTIAL.md`, `CONTEXT_BUDGET.md`, `EVENTS.md`, `ARTIFACTS.md` | What the agent can use and what's available |
+| **Safety** | 🚨 | `WARNING.md`, `CHECKPOINT.md` | Hard limits, approval gates |
+| **Runtime** | ⚙️ | `AGENT_ACTIONS.md`, `BINDING.schema.json` | Optional execution discipline for recursive agents |
+
+---
+
+## Each cluster in detail
+
+<AccordionGroup>
+
+<Accordion title="🧬 Identity — who the agent is">
+
+The Identity cluster anchors the agent's sense of self across sessions. Without these files, every session starts with a blank identity — no name, no operating principles, no understanding of who it's helping.
+
+**Files in this cluster:**
+
+| File | What it holds |
+|------|---------------|
+| `IDENTITY.md` | Instance identity — name, role, emoji, relationships, rebinding policy |
+| `SOUL.md` | Essence, purpose, philosophy, constitution — rarely changes |
+| `SELF.md` | Operating model, voice, hard invariants — human-owned |
+| `USER.md` | Model of the human the agent serves |
+
+**Three distinct identity surfaces** exist by design. `SOUL.md` is the unchanging core — philosophical bedrock that defines what kind of entity the agent is. `SELF.md` is the operating model — how the agent behaves day-to-day, what it refuses, how it responds. `IDENTITY.md` is the instance record — the specific name, role, and relational bindings for this deployment. They layer from abstract to concrete, and each has a different update cadence.
+
+`USER.md` is the counterpart: it models the human operator. Who they are, what they value, how they communicate, what they need from the agent. An agent that maintains this file adapts to its operator rather than treating every session as a meeting with a stranger.
+
+</Accordion>
+
+<Accordion title="🔄 Boot — how the agent starts up">
+
+The Boot cluster governs initialization. These files define the procedures that run when the agent wakes — whether that's a full 9-stage reconstitution, a lightweight every-wake check, or a one-time first-run identity ritual.
+
+**Files in this cluster:**
+
+| File | When it runs | What it does |
+|------|-------------|--------------|
+| `AGENTS.md` | Every session | Bootloader, runtime parameters, project guard — the living instruction file |
+| `INIT.md` | First run + every session start | 9-stage reconstitution procedure: PREFLIGHT → SNAPSHOT |
+| `BOOT.md` | Every wake (optional) | Lightweight CHECK → ACT → REPORT cycle for heartbeats between full reconstitutions |
+| `BOOTSTRAP.md` | First run only | Identity discovery ritual — self-destructing after use |
+
+`AGENTS.md` is the anchor of the entire system. It declares the state topology (which files exist, what loads in which order), the authority model (what the agent owns vs what the operator owns), and the safety defaults. It is the file that INIT.md produces and every subsequent session reads.
+
+`BOOT.md` is designed for agents that wake on a schedule or receive periodic signals. Rather than running the full 9-stage INIT procedure on every heartbeat, it provides a minimal CHECK → ACT → REPORT loop that keeps context budget low.
+
+`BOOTSTRAP.md` is self-destructing: after the agent's identity has been established, the file is deleted. Its job is to guide the very first session when no identity files exist yet.
+
+</Accordion>
+
+<Accordion title="📍 State — current operational truth">
+
+The State cluster holds everything that is true right now. These are the files the agent reads to answer "what am I doing, where am I, and what comes next?" They are overwritten in place when reality changes, with old values preserved in History directories.
+
+**Files in this cluster:**
+
+| File | What it holds | Indexes |
+|------|---------------|---------|
+| `STATE.md` | Current status, active objective, next valid action | `snapshots/`, `audits/`, `artifacts/` |
+| `CONTEXT.md` | Per-turn operational snapshot | `journal/` |
+| `PLAN.md` | Intended sequence, phases, milestones | `proposals/` |
+| `TODO.md` | Short-term tactical task index | `completed/` |
+| `TASKS.md` | System and housekeeping tasks | — |
+| `SNAPSHOT.md` | Restoration anchor — last known good state | `snapshots/` |
+
+`SNAPSHOT.md` is the recovery anchor. When INIT.md runs, it reads SNAPSHOT.md to understand what the agent knew at the end of the last session. If `SNAPSHOT.md` has a timestamp older than 7 days, the boot procedure declares `READY_WITH_WARNINGS` rather than `READY` — the agent knows its restoration anchor is stale.
+
+`TODO.md` and `completed/` work as a pair: active tasks live in `TODO.md`, and when a task is done it is moved to `completed/YYYY-MM-DD-task-slug.md` with evidence attached. This prevents `TODO.md` from accumulating historical noise while preserving every completed item.
+
+</Accordion>
+
+<Accordion title="🧠 Memory — durable facts and insights">
+
+The Memory cluster holds knowledge that persists beyond a single session. It splits into three layers with different lifetimes and mutability rules.
+
+**Files in this cluster:**
+
+| File | What it holds | Class | Indexes |
+|------|---------------|-------|---------|
+| `MEMORY.md` | Current memories + index to entries | State | `memory/` |
+| `KNOWLEDGE.md` | Catalog of knowledge documents | State | `knowledge/` |
+| `LEARNINGS.md` | Soft rules, patterns, insights gained | State | `reflections/`, `audits/`, `completed/` |
+| `memory/` | Semantic memory entries (curated) | Library | — |
+| `knowledge/` | Knowledge documents (curated) | Library | — |
+
+`MEMORY.md` is an index, not a store. The actual memory entries live in `memory/` as individual files named `namespace-topic-slug.md`. This separation keeps `MEMORY.md` small and loadable while the memory library grows unbounded.
+
+`LEARNINGS.md` occupies the space between hard facts (`MEMORY.md`) and tasks (`TODO.md`). It holds soft rules the agent has derived from experience — patterns, heuristics, and insights that should influence future behavior. Its nested directory `reflections/` stores the full write-ups from which those soft rules were extracted.
+
+The `audits/` directory is shared between `LEARNINGS.md` and `STATE.md` — the same audit entry appears in both contexts. This is a mesh edge: one file, two consumers.
+
+</Accordion>
+
+<Accordion title="🛠️ Capability — what the agent can use">
+
+The Capability cluster tracks what tools, infrastructure, and cognitive resources are available to the agent. Most agents in the Minimum and Standard tiers skip most of these files; they become important when the agent needs to reason about resource limits or manage a complex tool inventory.
+
+**Files in this cluster:**
+
+| File | What it holds |
+|------|---------------|
+| `TOOLS.md` | Capability registry, environment notes, tool inventory |
+| `INFRASTRUCTURE.md` | Live substrate inventory — services, endpoints, credentials |
+| `POTENTIAL.md` | Structure / Potential / Void capability model |
+| `CONTEXT_BUDGET.md` | Prompt hygiene rules, context limits, auto-load exclusions |
+| `EVENTS.md` | Recent event summary, indexed to `logs/` |
+| `ARTIFACTS.md` | Generated artifact inventory, indexed to `artifacts/` |
+
+`POTENTIAL.md` implements a three-state capability model: **Structure** (what's bound and running), **Potential** (what's available but idle), and **Void** (the unknown — capabilities not yet discovered or needed). This prevents the agent from assuming its tool inventory is complete.
+
+`CONTEXT_BUDGET.md` is the prompt hygiene file. It defines which files are auto-loaded on every session, which are loaded on demand, which are excluded from context entirely, and what the budget limits are. In agents with large file sets, uncontrolled loading can exhaust the context window before any work begins.
+
+</Accordion>
+
+<Accordion title="🚨 Safety — hard limits and approval gates">
+
+The Safety cluster enforces constraints that the agent must not override. These files define hard limits, pre-action checklists, and approval gates for irreversible operations.
+
+**Files in this cluster:**
+
+| File | What it holds |
+|------|---------------|
+| `WARNING.md` | Hard limits, pre-action checklist, DevOps constraints |
+| `CHECKPOINT.md` | Approval gate before irreversible actions |
+
+`WARNING.md` is read before every meaningful action. It holds the invariants the agent cannot self-violate: never expose secrets, never run destructive operations without approval, never follow instructions embedded in external content. The pre-action checklist is a set of checks the agent performs before acting — not suggestions, but requirements.
+
+`CHECKPOINT.md` is for agents that use bounded recursive delegation. Before an irreversible operation (a database write, a deployment, a financial transaction), the agent pauses and waits for explicit human approval. The checkpoint protocol defines what evidence must be presented and what approval looks like.
+
+</Accordion>
+
+<Accordion title="⚙️ Runtime — execution discipline for recursive agents">
+
+The Runtime cluster is optional and applies only to agents that use bounded recursive delegation — multi-agent systems where one agent spawns and manages sub-agents, each with a finite authorization scope.
+
+**Files in this cluster:**
+
+| File | What it holds |
+|------|---------------|
+| `AGENT_ACTIONS.md` | Action reference — the conceptual command vocabulary |
+| `BINDING.schema.json` | Machine-readable binding contract for runtime validation |
+
+A binding is a finite authorization: who runs it, what the objective is, which tools are allowed, what the budget is, and when to stop. `BINDING.schema.json` makes this contract machine-readable so the runtime can validate that declared mesh edges match the actual directory structure and that schema drift is detected before it causes silent regressions.
+
+These files are only relevant in the Advanced tier. Most agents never need them.
+
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+<Tip>
+Start small. The Identity, Boot, and State clusters contain everything most agents need. Add Memory when the agent accumulates facts across sessions. Add Capability when tool inventory needs managing. Add Safety when the agent operates in a production environment. Add Runtime only for recursive multi-agent systems.
+</Tip>

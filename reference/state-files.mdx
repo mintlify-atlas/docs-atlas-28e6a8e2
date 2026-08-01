@@ -1,0 +1,297 @@
+---
+title: "State files: the current truth layer of Continuity"
+sidebarTitle: "State Files"
+description: "Every root `.md` state file explained — cluster membership, purpose, content rules, and the writeback protocol that keeps state accurate."
+---
+
+State files are the core of Continuity. They are plain Markdown files that live at the workspace root and hold the agent's current understanding of reality: who it is, what it is doing, what it knows, and what constraints govern its behavior. Each file is overwritten in place when reality changes — and before overwriting, the old value is preserved in the paired history directory. This section documents every state file, organized by cluster, with precise rules for when and how to update each one.
+
+## What state files are
+
+State files are **current-value stores**. Every file answers a single question about the present — not the past, not a log, not an explanation of how things got here. If you need to record history, use a nested history directory. If you need to explain a decision, use the `completed/` journal. State files show only `Y`, never "was `X`, now `Y`."
+
+- One file per concern — identity, state, memory, capability, safety are all separate files.
+- Overwritten in place on every meaningful update.
+- The old value lands in the paired history directory (e.g., `snapshots/`) before overwriting.
+- Never used as logs, narratives, or event records.
+
+## Complete file table
+
+| File | Cluster | Purpose |
+|------|---------|---------|
+| `IDENTITY.md` | Identity | Instance identity, relationships, rebinding policy |
+| `SOUL.md` | Identity | Essence, purpose, philosophy, constitution |
+| `SELF.md` | Identity | Operating model, voice, hard invariants |
+| `USER.md` | Identity | Human / operator model |
+| `INIT.md` | Boot | 9-stage reconstitution procedure |
+| `AGENTS.md` | Boot | Bootloader, runtime params, project guard |
+| `BOOT.md` | Boot | Optional lightweight every-wake cycle |
+| `BOOTSTRAP.md` | Boot | First-run identity discovery (self-destructing) |
+| `STATE.md` | State | Current operational truth |
+| `CONTEXT.md` | State | Per-turn operational snapshot |
+| `PLAN.md` | State | Intended sequence, phases, milestones |
+| `TODO.md` | State | Tactical task index |
+| `TASKS.md` | State | System and housekeeping tasks |
+| `SNAPSHOT.md` | State | Restoration anchor |
+| `MEMORY.md` | Memory | Current memories and index to entries |
+| `KNOWLEDGE.md` | Memory | Catalog of knowledge documents |
+| `LEARNINGS.md` | Memory | Soft rules, insights gained |
+| `TOOLS.md` | Capability | Capability registry, environment notes |
+| `INFRASTRUCTURE.md` | Capability | Live substrate inventory |
+| `POTENTIAL.md` | Capability | Structure / potential / void model |
+| `CONTEXT_BUDGET.md` | Capability | Prompt hygiene and context limits |
+| `EVENTS.md` | Capability | Recent event summary |
+| `ARTIFACTS.md` | Capability | Generated artifact inventory |
+| `WARNING.md` | Safety | Hard limits, pre-action checklist |
+| `CHECKPOINT.md` | Safety | Approval gate before irreversible actions |
+| `AGENT_ACTIONS.md` | Runtime | Action reference (conceptual) |
+| `BINDING.schema.json` | Runtime | Machine-readable binding contract |
+
+## Clusters
+
+### 🧬 Identity cluster
+
+The identity cluster holds who the agent is. These files are the most stable in the system — they change only when the agent's fundamental nature, operator, or operating model changes.
+
+<AccordionGroup>
+  <Accordion title="IDENTITY.md — Instance identity">
+    Holds the agent's instance identity: name, role, version, parent lineage, and rebinding policy. Immutable at runtime — the agent reads this file on boot and does not modify it during normal operation. Update only when the agent is transferred to a new operator or when a fundamental identity change occurs.
+
+    **Connected to:** `SOUL.md`, `SELF.md`, `AGENTS.md`
+  </Accordion>
+  <Accordion title="SOUL.md — Essence and purpose">
+    Holds the agent's essence, purpose, philosophy, and constitution. The deepest layer of identity — rarely changes. This is the "why" behind the agent's existence and the ethical foundation that governs all behavior. Human-owned: the operator writes this file, not the agent.
+
+    **Connected to:** `SELF.md`, `WARNING.md`
+  </Accordion>
+  <Accordion title="SELF.md — Operating model">
+    Holds the agent's operating model, communication voice, hard invariants, and behavioral defaults. More operational than `SOUL.md` but still stable. Defines how the agent talks, reasons, and acts. Human-owned: the operator writes this file.
+
+    **Connected to:** `SOUL.md`, `WARNING.md`, `AGENTS.md`
+  </Accordion>
+  <Accordion title="USER.md — Operator model">
+    Holds the human operator's profile: name, preferences, communication style, and working context. Updated when the operator's preferences change or when new durable preferences are discovered. This file exists so the agent can adapt its behavior to its specific operator.
+
+    **Connected to:** `IDENTITY.md`, `AGENTS.md`
+  </Accordion>
+</AccordionGroup>
+
+### 🔄 Boot cluster
+
+The boot cluster governs how the agent starts up, reconstitutes itself, and loads its state chain. These files are procedural — they define the boot loop, not the agent's content.
+
+<AccordionGroup>
+  <Accordion title="INIT.md — Reconstitution procedure">
+    The 9-stage boot protocol: `PREFLIGHT → INSPECT → SCAN → LOAD → RECONCILE → DISCOVER → VALIDATE → DECLARE → SNAPSHOT`. Runs on first boot and every session start. May create `AGENTS.md` if it does not exist. The agent follows this file's instructions to reconstruct its full operational state from scratch.
+
+    **Stages:** PREFLIGHT, INSPECT, SCAN, LOAD, RECONCILE, DISCOVER, VALIDATE, DECLARE, SNAPSHOT
+  </Accordion>
+  <Accordion title="AGENTS.md — Bootloader and project guard">
+    The entry-point file — the one file that auto-loading runtimes pull on every session. Declares the state topology: which files exist, what loads on boot, and state governance rules. Also acts as the project guard: which paths the agent governs, what authority it has, and what safety constraints bind it. Must include an **Init Compliance** section following the boot protocol.
+
+    **Connected to:** All state files via load order
+  </Accordion>
+  <Accordion title="BOOT.md — Lightweight wake cycle">
+    Optional. A lightweight `CHECK → ACT → REPORT` cycle for periodic heartbeat operations. Used by agents that need to perform a quick health check on every wake without running the full 9-stage `INIT.md` procedure. Suitable for scheduled or daemon-style agents.
+
+    **When to use:** Agents running on a recurring schedule
+  </Accordion>
+  <Accordion title="BOOTSTRAP.md — Identity discovery ritual">
+    First-run only and self-destructing. Guides the agent through discovering and establishing its identity when no prior state exists. Once identity is established and `IDENTITY.md` is written, `BOOTSTRAP.md` is deleted. It should not be present in a fully initialized workspace.
+
+    **Lifecycle:** Create on first boot → delete after identity established
+  </Accordion>
+</AccordionGroup>
+
+### 📍 State cluster
+
+The state cluster holds the agent's current operational truth: what it is doing, what the plan is, and what tasks are active. These files change frequently — after every meaningful action.
+
+<AccordionGroup>
+  <Accordion title="STATE.md — Current operational truth">
+    The single most important state file. Holds the current status of all projects and infrastructure, the active objective, and any active blockers. Updated after every meaningful change to repository reality. When overwriting, snapshot the old value to `snapshots/` first.
+
+    **Mesh indexes:** `snapshots/`, `audits/`, `artifacts/`
+
+    **Update trigger:** Any change to project status, infrastructure, or active objectives
+  </Accordion>
+  <Accordion title="CONTEXT.md — Per-turn snapshot">
+    Holds the operational snapshot for the current turn: last action taken, current findings, next planned action, and active blockers. Updated during long multi-step operations — after each major step, not just at end of session. Pairs with `journal/` for persistent turn history.
+
+    **Mesh indexes:** `journal/`
+
+    **Update trigger:** After each major step in a multi-step operation
+  </Accordion>
+  <Accordion title="PLAN.md — Phased plan">
+    Holds the intended sequence of work: phases, milestones, and dependencies. Less granular than `TODO.md` — `PLAN.md` is the strategic roadmap, `TODO.md` is the tactical task list. Updated when phases complete or when the plan changes substantially.
+
+    **Mesh indexes:** `proposals/`
+
+    **Update trigger:** Phase completion, plan revision
+  </Accordion>
+  <Accordion title="TODO.md — Tactical task index">
+    The active task queue. Holds only active and pending tasks — completed tasks are removed immediately and moved to `completed/`. No strikethrough, no "RESOLVED" markers, no completed sections. Present means active; absent means done. Renumber remaining items after removal — no gaps.
+
+    **Mesh indexes:** `completed/`
+
+    **Update trigger:** Task starts, completes, or is added
+  </Accordion>
+  <Accordion title="TASKS.md — System and housekeeping tasks">
+    Shared task queue for system and housekeeping tasks, especially in multi-agent setups. Distinct from `TODO.md` in that it holds recurring or system-level tasks rather than project work. In orchestrator configurations, multiple agents may read and write this file.
+
+    **Connected to:** `AGENTS.md`, `EVENTS.md`
+  </Accordion>
+  <Accordion title="SNAPSHOT.md — Restoration anchor">
+    Holds the last-known-good state: deliverables, validation results, and the timestamp of the last clean checkpoint. Used by the boot procedure to restore context after interruption. Update after every successful checkpoint — `SNAPSHOT.md` should always reflect a state the agent can confidently resume from.
+
+    **Update trigger:** After every successful checkpoint or major deliverable
+  </Accordion>
+</AccordionGroup>
+
+### 🧠 Memory cluster
+
+The memory cluster connects the agent's root state to its curated knowledge stores. These files are indexes and summary surfaces — the actual content lives in the `memory/` and `knowledge/` library directories.
+
+<AccordionGroup>
+  <Accordion title="MEMORY.md — Durable facts index">
+    Holds current memories and an index pointer to the `memory/` library directory. Does not duplicate memory entry content — it holds current recalled facts and a manifest of what exists in `memory/`. Update when new durable facts are verified or when memory entries are added or retired.
+
+    **Mesh indexes:** `memory/`
+
+    **Update trigger:** New fact verified, memory entry added or retired
+  </Accordion>
+  <Accordion title="KNOWLEDGE.md — Knowledge catalog">
+    Holds a catalog of reference documents in the `knowledge/` directory. Points to research reports, external documentation excerpts, and domain notes. Update when new knowledge documents are added or when existing documents are superseded.
+
+    **Mesh indexes:** `knowledge/`
+
+    **Update trigger:** Knowledge document added or superseded
+  </Accordion>
+  <Accordion title="LEARNINGS.md — Soft rules and insights">
+    Holds soft rules and insights distilled from completed work. These are behavioral corrections and durable patterns — not event transcripts, not task records, not explanations of what happened. Every entry should be a reusable rule the agent can apply to future work.
+
+    **Mesh indexes:** `reflections/`, `audits/`
+
+    **Update trigger:** New insight gained from completed work
+  </Accordion>
+</AccordionGroup>
+
+### 🛠️ Capability cluster
+
+The capability cluster documents what the agent can use: tools, infrastructure, dormant capabilities, context limits, and outputs.
+
+<AccordionGroup>
+  <Accordion title="TOOLS.md — Capability registry">
+    Holds the capability registry: all tools available to the agent, environment notes, and any tool-specific constraints or quirks. Update when new tools are installed, configured, or deprecated. Pairs with `setup/` for installation records.
+
+    **Mesh indexes:** `setup/`
+  </Accordion>
+  <Accordion title="INFRASTRUCTURE.md — Live substrate inventory">
+    Holds the live inventory of services, servers, databases, and infrastructure the agent interacts with. Tracks operational status — "service operational", "health check OK" — not exact counts or sizes. Update when infrastructure state changes.
+
+    **Update trigger:** Infrastructure changes, service status changes
+  </Accordion>
+  <Accordion title="POTENTIAL.md — Structure / potential / void">
+    Holds the three-state capability model: **Structure** (what is bound and running), **Potential** (what is available but idle), and **Void** (capabilities not yet discovered or needed). Tracks dormant capabilities waiting to be activated.
+  </Accordion>
+  <Accordion title="CONTEXT_BUDGET.md — Prompt hygiene">
+    Defines auto-load budget, taint classes, exclusions, and log retention. Controls what gets loaded into the context window on boot and what is deferred. Critical for preventing context overflow in large deployments.
+  </Accordion>
+  <Accordion title="EVENTS.md — Event log pointer">
+    Holds a recent event summary and a pointer to the `logs/` directory for detailed JSONL event logs. Tracks significant system events without duplicating log content. Update when significant events occur.
+
+    **Mesh indexes:** `logs/`
+  </Accordion>
+  <Accordion title="ARTIFACTS.md — Generated artifact inventory">
+    Holds an inventory of generated outputs and evidence: files, reports, specs, and other deliverables the agent has produced. Update whenever an artifact is created or invalidated.
+
+    **Mesh indexes:** `artifacts/`
+  </Accordion>
+</AccordionGroup>
+
+### 🚨 Safety cluster
+
+The safety cluster holds the agent's hard constraints and approval gates. These files are read before any mutating action.
+
+<AccordionGroup>
+  <Accordion title="WARNING.md — Hard limits">
+    Holds the complete set of hard limits and pre-action checklists. Contents include: hard operational limits, secrets and data management rules, the list of dangerous commands requiring explicit approval, required posture rules, stop-and-ask conditions, and a bill of limits. If maintaining a dual copy (workspace + OS root), sync both on every update.
+
+    **Connected to:** `AGENTS.md` (child), `SELF.md`, `SOUL.md`
+
+    <Warning>
+      WARNING.md is read before every mutating action. Never weaken or remove entries without explicit operator approval.
+    </Warning>
+  </Accordion>
+  <Accordion title="CHECKPOINT.md — Approval gate">
+    Defines the approval gates that must be passed before irreversible actions. Used by Advanced-tier agents to require explicit sign-off before destructive or high-stakes operations. Pairs with `BINDING.schema.json` for machine-readable checkpoint contracts.
+
+    **Connected to:** `BINDING.schema.json`, `WARNING.md`
+  </Accordion>
+</AccordionGroup>
+
+### ⚙️ Runtime files
+
+Runtime files are optional and primarily used at the Advanced tier for recursive multi-agent systems.
+
+<AccordionGroup>
+  <Accordion title="BINDING.schema.json — Machine-readable contract">
+    The JSON Schema that defines the structure of a binding — a finite authorization for a recursive computation. Specifies who runs the computation, what the objective is, what tools are allowed, what the budget is, and when to stop. See the [Binding Schema reference](/reference/binding-schema) for the full field specification.
+
+    **Tier:** Advanced only
+  </Accordion>
+  <Accordion title="AGENT_ACTIONS.md — Action reference">
+    Conceptual action reference for multi-agent setups. Documents the action vocabulary agents can use when delegating work. This file is conceptual — it describes actions, not implementations.
+  </Accordion>
+  <Accordion title="AGENTS.promptinclude.md — Auto-injection config">
+    Configuration for frameworks that support auto-loading (Cursor, Agent Zero, and similar). Lists which state files should be injected into the system prompt on every session. Remove this file if your runtime uses native file-loading instead of prompt injection.
+  </Accordion>
+</AccordionGroup>
+
+## Writeback rules
+
+After any meaningful change to workspace reality, the agent updates the state files whose claims are no longer accurate.
+
+<Steps>
+  <Step title="Code changed">
+    Update `STATE.md` with new project status.
+  </Step>
+  <Step title="Task completed">
+    Remove from `TODO.md`, renumber remaining items, append to `completed/YYYY-MM-DD-task-slug.md`.
+  </Step>
+  <Step title="Insight gained">
+    Append a reusable rule to `LEARNINGS.md`.
+  </Step>
+  <Step title="Fact verified">
+    Update `MEMORY.md` or add an entry to `memory/`.
+  </Step>
+  <Step title="Knowledge curated">
+    Update `KNOWLEDGE.md` or add a document to `knowledge/`.
+  </Step>
+  <Step title="Major event">
+    Append to `logs/events.jsonl` and update `EVENTS.md`.
+  </Step>
+  <Step title="State checkpoint">
+    Snapshot old `STATE.md` to `snapshots/`, then refresh `SNAPSHOT.md`.
+  </Step>
+</Steps>
+
+<Warning>
+  Do not overwrite history files. History directories are append-only — old entries are preserved forever. Do not mark tasks complete without evidence (a test, an artifact, a commit, or a review).
+</Warning>
+
+### Content discipline
+
+State files hold current state only. They are not logs, not narratives, not explanations.
+
+| Content type | In state file? | Where instead |
+|---|---|---|
+| Current state, active tasks, status | ✅ Yes | — |
+| Logs, execution records, event accounts | ❌ No | `completed/` journal |
+| Explanations of why something was done | ❌ No | `completed/` journal |
+| Narrative describing a reorganization | ❌ No | Just update the path |
+| Historical context ("was X, now Y") | ❌ No | Just show `Y` |
+
+<Note>
+  Do not track volatile counts (file totals, sizes, workflow numbers) in state files. These change every session and tracking them is maintenance burden for zero signal. Keep categorical truths ("service operational") and store exact counts in audit files queried on demand.
+</Note>

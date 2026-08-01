@@ -1,0 +1,222 @@
+---
+title: "How Continuity boots: the 9-stage INIT procedure"
+sidebarTitle: "Boot Sequence"
+description: "A complete walkthrough of Continuity's 9-stage INIT procedure — from PREFLIGHT to SNAPSHOT — and the four boot-related files that power it."
+---
+
+When a Continuity agent starts a session, it does not simply read a config file and begin work. It runs a structured reconstitution procedure that rebuilds its full operational state from durable artifacts — checking the environment, loading files in order, reconciling parent-child relationships, validating required fields, and declaring a status before taking any action. This page explains that procedure in full.
+
+## Two boot scenarios
+
+Continuity handles two distinct situations at boot time, and the procedure is the same for both.
+
+**New agent from templates:** Copy the template files, replace `{{PLACEHOLDER}}` values with your agent's real identity, and run INIT.md. The procedure creates `AGENTS.md` if it does not exist, loads all files in the declared order, and declares `READY` when everything checks out.
+
+**Existing agent assimilating:** An agent that already has scattered state files — ad-hoc instructions, memory in various formats, identity spread across multiple documents — runs INIT.md against its current workspace. The procedure inspects what exists, maps that state onto the Continuity file structure, creates missing files, and reconciles. Existing agents do not need to start from scratch.
+
+---
+
+## The 9-stage INIT procedure
+
+INIT.md is the reconstitution procedure. Run it on every session start to rebuild operational state from durable artifacts.
+
+```text
+PREFLIGHT → INSPECT → SCAN → LOAD → RECONCILE → DISCOVER → VALIDATE → DECLARE → SNAPSHOT
+```
+
+<Steps>
+  <Step title="PREFLIGHT">
+    Confirm the host environment before touching any state files.
+
+    - Confirm host environment: container, OS, timezone, locale
+    - Confirm user identity and authority context
+    - Confirm network egress/ingress and available endpoints
+
+    If the environment is incoherent at this stage, the agent stops and reports. It does not proceed to INSPECT with an unknown environment.
+  </Step>
+
+  <Step title="INSPECT">
+    Examine the workspace for required files and available resources.
+
+    - List root files and confirm presence of canonical files (per the load order in `AGENTS.md`)
+    - Check disk space — if usage exceeds 90%, declare `BLOCKED`
+    - Check memory pressure and inode usage
+
+    INSPECT is a non-destructive read: it observes but does not create or modify anything.
+  </Step>
+
+  <Step title="SCAN">
+    Discover the file hierarchy and screen for security threats.
+
+    - Recursively scan subdirectories for local `AGENTS.md` files
+    - Build the hierarchy tree: identify parent/child relationships and record the parent path for each `AGENTS.md` found
+    - Scan context files for prompt injection markers, hidden HTML/JS, credential exfiltration patterns, and invisible characters
+    - Quarantine failures in `logs/quarantine/`
+
+    The security scan runs here, before any files are loaded, so that malicious content cannot influence the reconstitution procedure itself.
+  </Step>
+
+  <Step title="LOAD">
+    Read all files in the declared load order.
+
+    - Read all files in the load order defined in `AGENTS.md`
+    - Read `SNAPSHOT.md` (last known good state)
+    - Read `LEARNINGS.md` (insights and soft rules from prior sessions)
+
+    Files are loaded in the specific order declared in `AGENTS.md` — identity files first, then capability files, then operational state, then task and planning files. Load order matters because later files may reference state established by earlier ones.
+  </Step>
+
+  <Step title="RECONCILE">
+    Resolve the parent/child hierarchy and identify any state drift.
+
+    - Load parent `AGENTS.md` before child; reconcile each level of the hierarchy
+    - Compare `STATE.md` with `SNAPSHOT.md` — identify drift between last known good state and current state
+    - Compare `CONTEXT.md` with the current environment — identify changes since last session
+    - Compare parent authority with local `AGENTS.md` — a child may refine scope but may not weaken parent constraints
+    - If contradictions exist, parent wins; add to `STATE.md` blockers
+
+    Reconciliation is how the agent detects that something changed between sessions — a task that was in progress is now blocked, an infrastructure endpoint is unreachable, a parent constraint has been updated.
+  </Step>
+
+  <Step title="DISCOVER">
+    Load available tools and discover connected services.
+
+    - Load available tools from the agent framework
+    - If `.mcp.json` is present, discover MCP servers
+    - If `agents.json` is present, load bound agent profiles
+    - List loaded skills
+    - Record partner endpoints but do not block on reachability
+
+    Discovery is optimistic: the agent records what it finds but does not fail if an endpoint is temporarily unreachable. Reachability failures become warnings, not blockers.
+  </Step>
+
+  <Step title="VALIDATE">
+    Check that all required files exist, are structurally valid, and contain the expected fields.
+
+    The validation table covers every required file:
+
+    | File | Must have |
+    |------|-----------|
+    | `AGENTS.md` | Exists and is valid |
+    | `IDENTITY.md` | Exists and is valid |
+    | `SELF.md` | Defines operating principles and non-goals |
+    | `SOUL.md` | Defines essence and purpose |
+    | `STATE.md` | Defines `status`, `active_objective`, `next_valid_action` |
+    | `CONTEXT.md` | Exists and is valid |
+    | `INIT.md` | Exists and is valid |
+    | `TODO.md` | Exists and is valid |
+    | `PLAN.md` | Exists and is valid |
+    | `TOOLS.md` | Exists and is valid |
+    | `SNAPSHOT.md` | Timestamp within last 7 days (else `READY_WITH_WARNINGS`) |
+
+    Each row is a checkbox — all must be checked before DECLARE can issue `READY`.
+  </Step>
+
+  <Step title="DECLARE">
+    Issue the boot status and write it into `STATE.md`.
+
+    The possible outcomes:
+
+    - **READY** — all files present, no blockers, no warnings
+    - **READY_WITH_WARNINGS** — operational but with caveats (stale snapshot, unreachable partner, optional file missing)
+    - **BLOCKED** — missing required file or critical blocker; the agent must not proceed
+
+    The declaration is written into `STATE.md` and appended to `logs/events.jsonl`:
+
+    ```text
+    Status: [READY / READY_WITH_WARNINGS / BLOCKED]
+    Warnings: [LIST_OR_NONE]
+    Blockers: [LIST_OR_NONE]
+    Objective: [FROM_PLAN.MD]
+    ```
+  </Step>
+
+  <Step title="SNAPSHOT">
+    If initialization changed any state, refresh the restoration anchor.
+
+    - If initialization changed state, refresh `SNAPSHOT.md`
+    - Write an immutable copy to `snapshots/YYYY-MM-DDTHH-MM-SS.md`
+
+    This ensures that the next boot has an accurate restoration anchor, even if the session ends unexpectedly before the agent gets to do any work.
+  </Step>
+</Steps>
+
+---
+
+## The four boot-related files
+
+| File | When | What |
+|------|------|------|
+| `INIT.md` | First run + every session start | Reconstitution procedure. 9 stages. Creates `AGENTS.md` if missing. |
+| `AGENTS.md` | Every session | Living instruction file. Bootloader + runtime parameters + project guard. |
+| `BOOT.md` | Every wake (optional) | Lightweight CHECK → ACT → REPORT cycle for heartbeats between full reconstitutions. |
+| `BOOTSTRAP.md` | First run only | Identity discovery ritual. Guides the very first session. Self-destructing after use. |
+
+<Note>
+`BOOT.md` is not a replacement for `INIT.md`. INIT runs the full 9-stage reconstitution and is required at session start. BOOT is a lightweight alternative for agents that wake on a schedule — it reads `STATE.md`, checks `TODO.md`, acts if there's work to do, and updates `CONTEXT.md`. If the agent is confused about state, stop using BOOT and run INIT instead.
+</Note>
+
+---
+
+## Post-boot states
+
+After DECLARE runs, the agent's status is one of three values:
+
+<Tabs>
+  <Tab title="READY">
+    All required files are present and valid. No blockers. No warnings. The snapshot is fresh (within 7 days). The agent can proceed immediately to its active objective.
+
+    ```text
+    Status: READY
+    Warnings: NONE
+    Blockers: NONE
+    Objective: [from PLAN.md]
+    ```
+  </Tab>
+  <Tab title="READY_WITH_WARNINGS">
+    The agent is operational but something is not ideal — the snapshot is stale, an optional file is missing, or a partner endpoint is unreachable. The agent can proceed but should address the warnings.
+
+    Common causes:
+    - `SNAPSHOT.md` timestamp is older than 7 days
+    - A recommended (non-required) file is absent
+    - A DISCOVER-phase partner is not reachable
+    - State drift detected between `STATE.md` and `SNAPSHOT.md`
+
+    ```text
+    Status: READY_WITH_WARNINGS
+    Warnings: SNAPSHOT.md timestamp is 9 days old
+    Blockers: NONE
+    Objective: [from PLAN.md]
+    ```
+  </Tab>
+  <Tab title="BLOCKED">
+    A required file is missing, a critical invariant is violated, or a blocker was added during RECONCILE. The agent must not proceed. It reports the blocker in `STATE.md` and waits for the operator to resolve it.
+
+    Common causes:
+    - A required file (`IDENTITY.md`, `STATE.md`, `AGENTS.md`) is absent
+    - Disk usage exceeds 90%
+    - A parent/child authority contradiction could not be reconciled
+    - The security scan quarantined a file that was required for loading
+
+    ```text
+    Status: BLOCKED
+    Warnings: NONE
+    Blockers: IDENTITY.md is missing
+    Objective: NONE — resolve blockers first
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Existing agents: mapping state onto the file structure
+
+An existing agent — one with scattered notes, ad-hoc instructions, or memory in a custom format — assimilates into Continuity by running INIT.md against its current workspace. The procedure does not require a blank slate.
+
+INIT.md's INSPECT and SCAN stages identify what already exists. RECONCILE maps it onto the file structure: existing notes become `MEMORY.md` entries, current instructions become the body of `AGENTS.md`, task lists become `TODO.md`. Missing files are created from templates with `{{PLACEHOLDER}}` values left for the operator to fill in.
+
+The result is a workspace that has a valid Continuity structure even if it started as something else entirely.
+
+<Info>
+After assimilation, run the post-boot checklist from `USAGE.md`: confirm all `{{PLACEHOLDER}}` values are replaced, verify `STATE.md` declares a status, ensure secrets are in `.secrets/` or environment variables rather than in markdown files, and delete `BOOTSTRAP.md` once identity is established.
+</Info>

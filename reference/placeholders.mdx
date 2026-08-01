@@ -1,0 +1,138 @@
+---
+title: "Template placeholders and how to fill them in"
+sidebarTitle: "Placeholders"
+description: "Every `{{UPPER_CASE}}` placeholder in Continuity templates, example values, the check script, and a post-fill checklist to verify clean setup."
+---
+
+All Continuity templates use `{{UPPER_CASE}}` placeholders as stand-ins for instance-specific values. When you copy a template to your workspace, every placeholder must be replaced with a real value before the file is functional. Unfilled placeholders are the most common cause of broken boot sequences and malformed state files. This page lists every placeholder, gives example values, explains how to find any that were missed, and covers what to verify after filling them all in.
+
+## Core placeholders
+
+These placeholders appear across the base templates and must be filled in for any agent, regardless of tier.
+
+| Placeholder | Description | Example values |
+|-------------|-------------|----------------|
+| `{{AGENT_NAME}}` | The agent's display name | `MyAgent`, `ResearchBot`, `OpsAgent` |
+| `{{AGENT_ROLE}}` | The agent's operational role | `orchestration core`, `research agent`, `DevOps operator` |
+| `{{AGENT_EMOJI}}` | Single emoji representing the agent | `🧬`, `⚡`, `🔬`, `🛠️` |
+| `{{AGENT_VERSION}}` | Version string for this agent instance | `1.0.0`, `3.0-transfer`, `2.1-beta` |
+| `{{MODEL_NAME}}` | The underlying model powering the agent | `gpt-4o`, `llama-3`, `claude-opus-4`, `custom` |
+| `{{PROVIDER}}` | The model provider or runtime | `anthropic`, `openai`, `openrouter`, `custom` |
+| `{{MASTER_NAME}}` | The operator's name | `Alejandro`, `Sarah`, `Team Alpha` |
+| `{{ENVIRONMENT}}` | Where the agent runs | `container`, `local`, `cloud`, `staging` |
+| `{{DATE}}` | The initialization or creation date | `2026-06-27` |
+
+## Pack-specific placeholders
+
+Some state packs introduce additional placeholders for their operating context.
+
+| Placeholder | Description | Example values |
+|-------------|-------------|----------------|
+| `{{PROJECT_NAME}}` | The name of the current project | `auth-service`, `docs-v2`, `api-gateway` |
+| `{{READY_OR_BLOCKED}}` | Boot declaration status | `READY`, `READY_WITH_WARNINGS`, `BLOCKED` |
+| `{{BRANCH}}` | Active git branch | `main`, `feat/auth-refactor`, `fix/webhook-timeout` |
+| `{{BLOCKERS_OR_NONE}}` | Current blockers or explicit none | `None`, `Waiting on DB credentials from ops` |
+
+## Additional template-specific placeholders
+
+Individual template files introduce placeholders scoped to their content. These appear in history directory entry templates and are filled at write time, not at setup time.
+
+| Placeholder | Where used | Description |
+|-------------|-----------|-------------|
+| `{{TASK_ID}}` | `completed/ENTRY.template.md` | Unique task identifier |
+| `{{TASK_DESCRIPTION}}` | `completed/ENTRY.template.md` | Short description of the completed task |
+| `{{RESULT_SUMMARY}}` | `completed/ENTRY.template.md` | What was achieved |
+| `{{EVIDENCE_1}}` | `completed/ENTRY.template.md` | Evidence description |
+| `{{EVIDENCE_PATH_1}}` | `completed/ENTRY.template.md` | Path or URL to evidence artifact |
+| `{{STATE_SUMMARY}}` | `snapshots/ENTRY.template.md` | State content at snapshot time |
+| `{{ACTIVE_OBJECTIVE}}` | `snapshots/ENTRY.template.md` | What the agent was doing |
+| `{{TURN_ID}}` | `journal/ENTRY.template.md` | Turn number for this journal entry |
+| `{{ARTIFACT_NAME}}` | `artifacts/ENTRY.template.md` | Name of the generated artifact |
+| `{{GENERATED_BY}}` | `artifacts/ENTRY.template.md` | Which agent or process produced this artifact |
+
+## Finding unfilled placeholders
+
+Continuity ships a script that scans your workspace for any remaining `{{UPPER_CASE}}` markers:
+
+```bash
+# Validate that all placeholders have been replaced
+./scripts/check-placeholders.sh /your/workspace/
+```
+
+The script outputs every file and line where an unfilled placeholder was found. Run it after setup and after copying any new template. A clean workspace produces no output.
+
+You can also run a quick manual check with `grep`:
+
+```bash
+# Find all unfilled placeholders in the workspace
+grep -rn '{{' /your/workspace/ --include="*.md" --include="*.json"
+```
+
+Zero matches means the workspace is clean.
+
+## Post-fill checklist
+
+After replacing all placeholders, verify the following before running the boot sequence:
+
+<Steps>
+  <Step title="All placeholders replaced">
+    Run `check-placeholders.sh` or the `grep` command above. Zero matches required.
+  </Step>
+  <Step title="IDENTITY.md is complete">
+    Verify `IDENTITY.md` has real values for `name`, `role`, and `emoji` — not placeholder strings.
+  </Step>
+  <Step title="SELF.md has operating principles">
+    Verify `SELF.md` has operating principles and invariants filled in, not left as `{{OPERATING_PRINCIPLES}}`.
+  </Step>
+  <Step title="STATE.md declares a valid status">
+    Verify `STATE.md` declares `READY` or `READY_WITH_WARNINGS`, not `{{READY_OR_BLOCKED}}`.
+  </Step>
+  <Step title="TODO.md is actionable">
+    Verify `TODO.md` has at least one real task or is explicitly marked empty — not a placeholder task like `{{FIRST_TASK}}`.
+  </Step>
+  <Step title="SNAPSHOT.md has a recent timestamp">
+    Verify `SNAPSHOT.md` has a real date within the past 7 days, not `{{DATE}}`.
+  </Step>
+  <Step title="BOOTSTRAP.md is deleted">
+    If first-run is complete and identity is established, verify `BOOTSTRAP.md` has been deleted from the workspace.
+  </Step>
+  <Step title="Secrets are not in markdown files">
+    Verify that no placeholder value contains real credentials, API keys, tokens, or passwords. See warning below.
+  </Step>
+</Steps>
+
+<Warning>
+  **Never put real secrets, API keys, tokens, or passwords in placeholder values.** State files are plain Markdown and will be committed to git, potentially exposed in logs, and loaded into context windows. Secrets belong in environment variables or a `.secrets/` directory that is listed in `.gitignore`. If you discover a secret in a state file, rotate it immediately — treat the exposure as a credential compromise.
+</Warning>
+
+## How placeholders work in templates
+
+Every template file in the Continuity repo uses `{{UPPER_CASE}}` markers to indicate where instance-specific values go. The double-brace `{{` / `}}` syntax is visually distinctive and easy to grep for. No preprocessing step is required — you replace the markers manually (or via a script) when setting up the workspace.
+
+```markdown
+# Example: IDENTITY.md before fill-in
+
+Agent name: {{AGENT_NAME}}
+Role: {{AGENT_ROLE}}
+Version: {{AGENT_VERSION}}
+Model: {{MODEL_NAME}}
+Provider: {{PROVIDER}}
+Operator: {{MASTER_NAME}}
+Environment: {{ENVIRONMENT}}
+```
+
+```markdown
+# Example: IDENTITY.md after fill-in
+
+Agent name: ResearchBot
+Role: research agent
+Version: 2.0.0
+Model: gpt-4o
+Provider: openrouter
+Operator: Sarah
+Environment: cloud
+```
+
+<Tip>
+  Placeholders are intentionally opinionated — they use consistent names so the `check-placeholders.sh` script can reliably find them. If you introduce custom placeholders in your own templates, follow the same `{{UPPER_CASE}}` convention so the script catches them automatically.
+</Tip>

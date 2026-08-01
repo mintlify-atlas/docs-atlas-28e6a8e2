@@ -1,47 +1,135 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get started with Continuity in 60 seconds"
+sidebarTitle: "Quickstart"
+description: "Clone the repo, copy the minimum file set, fill in your agent's values, and run the INIT boot protocol to get a persistent-state agent up and running."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+This guide walks you through getting a Continuity-powered agent workspace running from scratch. By the end you will have a complete minimum-tier state file set, all placeholders replaced with real values, and a booted agent that declares `READY`. The whole process takes about 60 seconds.
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
 
-    ```bash
-    npm install your-package
-    ```
-  </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+### Clone the repository
 
-    ```bash
-    your-cli init
-    ```
-  </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+Pull the Continuity template repo to your local machine:
 
-    ```bash
-    your-cli start
-    ```
-  </Step>
-</Steps>
+```bash
+git clone https://github.com/bitwikiorg/continuity.git
+```
+
+This gives you the full template library — all state files, packs, adapters, and scripts. You will copy only the files your agent actually needs.
+
+### Copy the minimum file set
+
+Copy the core files to your agent workspace. This is the **Minimum tier** — everything a simple agent needs to boot and maintain continuity across sessions:
+
+```bash
+cp continuity/{AGENTS,IDENTITY,SELF,SOUL,STATE,INIT,TODO,SNAPSHOT}.md /your/workspace/
+```
+
+<Note>
+You do not need all 30+ files. Most agents run well on 3–5. The Minimum tier is the right starting point — add files only when your agent's loop actually needs them.
+</Note>
+
+### Replace `{{PLACEHOLDERS}}`
+
+Every template file contains `{{UPPER_CASE}}` placeholder markers. Search for them across your workspace and fill in your agent's real values:
+
+```bash
+grep -r "{{" /your/workspace/
+```
+
+Here is the full placeholder reference:
+
+| Placeholder | Example values |
+|---|---|
+| `{{AGENT_NAME}}` | `MyAgent`, `ResearchBot`, `OpsAgent` |
+| `{{AGENT_ROLE}}` | `orchestration core`, `research agent`, `DevOps operator` |
+| `{{AGENT_EMOJI}}` | `🧬`, `⚡`, `🔬` |
+| `{{AGENT_VERSION}}` | `1.0.0`, `3.0-transfer` |
+| `{{MODEL_NAME}}` | `gpt-4o`, `llama-3`, `custom` |
+| `{{PROVIDER}}` | `anthropic`, `openrouter`, `custom` |
+| `{{MASTER_NAME}}` | `Alejandro` |
+| `{{ENVIRONMENT}}` | `container`, `local`, `cloud` |
+| `{{DATE}}` | `2026-06-27` |
 
 <Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+You can validate that all placeholders have been filled in with the bundled script:
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
+```bash
+./continuity/scripts/check-placeholders.sh /your/workspace/
+```
 </Tip>
+
+### Run the INIT protocol
+
+On first boot — and at the start of every subsequent session — the agent runs `INIT.md`. This is the 9-stage reconstitution procedure that rebuilds operational state from your durable files:
+
+```text
+PREFLIGHT → INSPECT → SCAN → LOAD → RECONCILE → DISCOVER → VALIDATE → DECLARE → SNAPSHOT
+```
+
+| Stage | What happens |
+|---|---|
+| **PREFLIGHT** | Confirms host environment, user identity, and network access |
+| **INSPECT** | Lists root files, checks disk and memory pressure |
+| **SCAN** | Recursively discovers nested `AGENTS.md` files, builds hierarchy tree, scans for security threats |
+| **LOAD** | Reads all files in the load order defined in `AGENTS.md`, including `SNAPSHOT.md` and `LEARNINGS.md` |
+| **RECONCILE** | Compares `STATE.md` with `SNAPSHOT.md` to identify drift; resolves parent/child conflicts |
+| **DISCOVER** | Loads available tools, discovers MCP servers and bound agent profiles |
+| **VALIDATE** | Checks each required file exists and is structurally valid |
+| **DECLARE** | Writes `READY`, `READY_WITH_WARNINGS`, or `BLOCKED` into `STATE.md` |
+| **SNAPSHOT** | If initialization changed state, refreshes `SNAPSHOT.md` and writes immutable copy to `snapshots/` |
+
+Point your agent at `INIT.md` as its entry instruction. Once it completes, `STATE.md` will contain the `READY` declaration and your agent is operational.
+
+<Warning>
+If `IDENTITY.md` or `SELF.md` is missing at first boot, the agent is considered unbound. It will follow `BOOTSTRAP.md` if present, or request direction from the operator. Delete `BOOTSTRAP.md` after identity is established — it is a self-destructing first-run ritual.
+</Warning>
+
+### Add git for versioned history (recommended)
+
+Git is optional but strongly recommended. Every commit becomes a verifiable, diff-able snapshot of the agent's full cognitive state:
+
+```bash
+cd /your/workspace/ && git init && git add -A && git commit -m "initial state"
+```
+
+After meaningful work, the agent commits again — capturing exactly what it knew, decided, and completed at that moment. You can `git diff` two commits to see state changes, `git checkout` a hash to restore a previous cognitive state, or `git blame` to trace when a decision was made.
+
+<Note>
+Git and Continuity's nested history directories are two complementary layers. Git gives you byte-level diffs and cryptographic provenance. Nested directories like `snapshots/` and `completed/` give you semantically organized, agent-readable history. Use both.
+</Note>
+
+</Steps>
+
+## Post-boot checklist
+
+Run through this checklist after your first boot to confirm the workspace is clean and operational:
+
+- [ ] All `{{PLACEHOLDERS}}` replaced with real values
+- [ ] `IDENTITY.md` has name, role, and emoji filled in
+- [ ] `SELF.md` has operating principles and invariants defined
+- [ ] `STATE.md` declares `READY` or `READY_WITH_WARNINGS`
+- [ ] `TODO.md` has at least one task, or is explicitly marked empty
+- [ ] `SNAPSHOT.md` has a timestamp within the last 7 days
+- [ ] Secrets are in `.secrets/` or environment variables — **not** in any markdown file
+- [ ] `BOOTSTRAP.md` deleted (if first-run identity establishment is complete)
+
+## Existing agents
+
+If your agent already has its own scattered state — ad-hoc instruction files, notes, memory in various formats — you do not need to start from scratch. Run `INIT.md` against your current workspace. It will inspect what exists, map your state onto the Continuity file structure, create missing files, and reconcile. The system is designed to assimilate, not replace.
+
+<CardGroup cols={2}>
+  <Card title="Tiers & File Selection" icon="layers" href="/core/tiers">
+    Learn when to add more files and which tier fits your agent's loop type.
+  </Card>
+  <Card title="State Packs" icon="box" href="/packs/overview">
+    Start from a pre-wired pack tuned for your agent's operating mode.
+  </Card>
+  <Card title="Runtime Adapters" icon="plug" href="/adapters/overview">
+    Wire Continuity into Claude Code, Codex, Hermes, OpenClaw, or Agent Zero.
+  </Card>
+  <Card title="Reference" icon="book" href="/reference/overview">
+    Full file taxonomy, writeback protocol, mesh declaration, and more.
+  </Card>
+</CardGroup>

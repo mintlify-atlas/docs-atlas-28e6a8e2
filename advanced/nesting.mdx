@@ -1,0 +1,169 @@
+---
+title: "Nesting state files across project scopes"
+sidebarTitle: "Nesting"
+description: "How CONTINUITY state files nest across project directories, how the agent resolves the scope chain, and what rules govern child-to-parent inheritance."
+---
+
+Every state file in CONTINUITY can live at any level of your directory tree. `STATE.md`, `TODO.md`, `MEMORY.md`, `CONTEXT.md` — all of them can be placed at the root, inside a project folder, inside a subsystem folder, or deeper still. Each level captures a complete picture of the system at its own scope, and the agent reads the whole chain before acting. This page explains how the nesting model works, how scope resolution happens, and what rules prevent a child file from silently undoing a parent's constraints.
+
+## The nesting model
+
+Any file can be placed inside a project subdirectory. The result is a hierarchy where each node is a complete state description for its scope. A root `STATE.md` describes the whole workspace; a `project-a/STATE.md` narrows the focus to that project; a `project-a/sub/STATE.md` narrows further to a subsystem.
+
+```graphql
+/AGENTS.md  /STATE.md  /TODO.md  /MEMORY.md       # root: global state
+├── /project-a/STATE.md  /project-a/TODO.md        # child: project-specific state
+│   └── /project-a/sub/STATE.md                    # grandchild: subsystem state
+└── /project-b/STATE.md  /project-b/MEMORY.md      # child: different project
+```
+
+### Inheritance rules
+
+| Rule | What it means |
+|------|---------------|
+| **Child inherits** | Load order, authority model, and safety defaults flow down from parent to child automatically |
+| **Child refines** | A child may add project-specific parameters, narrow the agent's scope, or override index declarations |
+| **Child cannot weaken parent** | Safety rules and authority boundaries set by the parent are preserved — a child may never silently remove them |
+| **Conflict resolution** | When a child and parent disagree on a constraint, the parent wins; escalate blockers to `STATE.md` |
+| **Discovery** | `INIT.md` builds the full hierarchy tree on boot and loads parent files before child files |
+
+### Child parent declaration
+
+A child file declares its relationship to the parent in its YAML frontmatter or a dedicated section:
+
+```yaml
+parent: ../STATE.md
+refines:
+  - scope: project-a only
+  - adds: project-specific entries
+  - overrides: index (adds project files)
+```
+
+This declaration is what makes the chain explicit and machine-auditable. `INIT.md` reads these declarations to construct the full hierarchy before any action is taken.
+
+## Practical nesting example
+
+Consider a monorepo with a backend subsystem and an auth module inside it. Each level gets its own state files:
+
+```graphql
+/my-project
+  AGENTS.md          ← global identity and load order
+  STATE.md           ← "Current: Building auth"
+  TODO.md            ← high-level tasks
+
+  /backend
+    STATE.md         ← "Current: Refactoring JWT"
+    TODO.md          ← backend-specific tasks
+
+    /auth
+      STATE.md       ← "Current: Writing tests"
+```
+
+When an agent session opens inside `/backend/auth/`, it loads this chain — in order, from the outermost scope in:
+
+<Steps>
+  <Step title="Root AGENTS.md">
+    Establishes identity, load order, and global safety rules for the entire workspace.
+  </Step>
+  <Step title="Root STATE.md">
+    Provides project-wide status — in this example, "Building auth" — so the agent understands the high-level objective.
+  </Step>
+  <Step title="/backend/STATE.md">
+    Narrows context to the subsystem — "Refactoring JWT" — which tells the agent what the immediate surrounding work is.
+  </Step>
+  <Step title="/backend/auth/STATE.md">
+    Provides task-level precision — "Writing tests" — the nearest applicable state that governs the current action.
+  </Step>
+</Steps>
+
+The agent obeys the nearest state for local detail while remaining bound by every ancestor's constraints.
+
+## Scoped state resolution
+
+Before an agent acts, it resolves the state chain that governs the work area. The resolution always runs from the outermost scope inward:
+
+```text
+Global state → project state → subsystem state → task state → current action
+```
+
+The agent does not load every file by default. It loads the **smallest state chain sufficient for the action**. Different work types produce different minimal chains:
+
+<Tabs>
+  <Tab title="Code edit chain">
+    ```graphql
+    /AGENTS.md
+    /STATE.md
+    /TODO.md
+    /src/AGENTS.md
+    /src/auth/AGENTS.md
+    /src/auth/STATE.md
+    ```
+    Only the files on the path from root to the target directory are loaded. Files in unrelated branches are skipped.
+  </Tab>
+  <Tab title="Research chain">
+    ```graphql
+    /IDENTITY.md
+    /STATE.md
+    /MEMORY.md
+    /KNOWLEDGE.md
+    /research/STATE.md
+    /research/SOURCES.md
+    ```
+    Research work loads identity and memory roots instead of project-level code state.
+  </Tab>
+  <Tab title="Multi-agent chain">
+    ```graphql
+    /STATE.md
+    /TOOLS.md
+    /CHECKPOINT.md
+    /BINDING.schema.json
+    /runs/active/STATE.md
+    /runs/active/TASKS.md
+    ```
+    Recursive agent runs load the binding contract and checkpoint gate in addition to the active run's state.
+  </Tab>
+</Tabs>
+
+### Scoped loading rule
+
+```text
+Resolve scope before action.
+Obey the nearest applicable state.
+Preserve parent constraints.
+Update affected state after meaningful change.
+```
+
+The nearest state gives local precision. The parent state provides global continuity. A child may refine scope, add detail, narrow behavior, or specialize context. A child may **not** silently weaken parent constraints.
+
+## Post-action reconciliation
+
+After a meaningful change, the agent updates every file whose claims are no longer accurate. The scope chain determines which files are affected.
+
+```text
+Action changes reality.
+Reality invalidates old state.
+Old state is preserved when needed.
+Current state is rewritten.
+Indexes are reconciled.
+```
+
+<Info>
+  A task completion may update `TODO.md`, `STATE.md`, `SNAPSHOT.md`, and `completed/` across multiple scopes — root and project-level — if the change affects both. A new tool discovery may update `TOOLS.md` and `INFRASTRUCTURE.md`. A lesson learned updates `LEARNINGS.md` or adds an entry to `memory/`.
+</Info>
+
+The agent does not preserve stale state out of politeness. If reality changed, state changes. This is what prevents CONTINUITY drift across long-running projects with deep nesting hierarchies.
+
+<CardGroup cols={2}>
+  <Card title="Mesh" href="/advanced/mesh">
+    Beyond hierarchy: many-to-many relationships between state files and shared directories.
+  </Card>
+  <Card title="Runtime Contracts" href="/advanced/runtime-contracts">
+    Binding lifecycle and machine-readable contracts for recursive multi-agent systems.
+  </Card>
+  <Card title="Core Tiers" href="/core/tiers">
+    Which files to use at which tier, and when to add nesting.
+  </Card>
+  <Card title="Ontology" href="/core/ontology">
+    State, History, and Library classes — the taxonomy that governs nesting rules.
+  </Card>
+</CardGroup>

@@ -1,0 +1,249 @@
+---
+title: "History directories: append-only event records"
+sidebarTitle: "History Directories"
+description: "The eight append-only directories that preserve everything Continuity has ever done — naming patterns, entry templates, and the never-modify rule."
+---
+
+History directories are the append-only record layer of Continuity. While state files hold the current value of each concern, history directories preserve every value that state files have ever held. When `STATE.md` is overwritten, the old version lands in `snapshots/`. When a task is completed and removed from `TODO.md`, it goes to `completed/`. History never shrinks — old entries are preserved forever and new entries are appended alongside them.
+
+## Directory table
+
+Each history directory is indexed by a root state file. The table below shows the full set, their naming patterns, and which state file each one connects to.
+
+| Directory | Class | Naming pattern | Indexed by |
+|-----------|-------|---------------|------------|
+| `completed/` | History | `YYYY-MM-DD-task-slug.md` | `TODO.md` |
+| `journal/` | History | `YYYY-MM-DD-turn-N.md` | `CONTEXT.md` |
+| `reflections/` | History | `YYYY-MM-DD-topic-slug.md` | `LEARNINGS.md` |
+| `snapshots/` | History | `YYYY-MM-DDTHH-MM-SS.md` | `STATE.md` |
+| `audits/` | History | `YYYY-MM-DD-type-slug.md` | `STATE.md`, `LEARNINGS.md` |
+| `proposals/` | History | `YYYY-MM-DD-topic-slug.md` | `PLAN.md` |
+| `setup/` | History | `YYYY-MM-DD-tool-name.md` | `TOOLS.md` |
+| `artifacts/` | History | `YYYY-MM-DD-name.ext` | `STATE.md`, `ARTIFACTS.md` |
+
+<Note>
+  `audits/` is indexed by both `STATE.md` and `LEARNINGS.md` — that is a mesh edge. One audit entry serves two state files. One file, two contexts. No duplication.
+</Note>
+
+## Directory details
+
+<AccordionGroup>
+  <Accordion title="completed/ — Finished task records">
+    When a task is removed from `TODO.md`, it moves here. Each entry documents the task, the result, evidence of completion, and any learnings. Removing a task from `TODO.md` without a corresponding `completed/` entry is a protocol violation — evidence must exist before a task is considered done.
+
+    **Indexed by:** `TODO.md`
+
+    **Naming:** `YYYY-MM-DD-task-slug.md` — e.g., `2026-06-27-fix-webhook.md`
+  </Accordion>
+  <Accordion title="journal/ — Narrative event log">
+    Per-turn operational snapshots. When `CONTEXT.md` captures a significant turn, the turn's full context — what happened before, actions taken, result, and next context — is appended here. Provides a queryable narrative history of the agent's work session by session.
+
+    **Indexed by:** `CONTEXT.md`
+
+    **Naming:** `YYYY-MM-DD-turn-N.md` — e.g., `2026-06-27-turn-3.md`
+  </Accordion>
+  <Accordion title="reflections/ — Learning records">
+    Detailed records of insights, behavioral corrections, and soft rules discovered through completed work. While `LEARNINGS.md` holds distilled reusable rules, `reflections/` holds the fuller narrative behind each learning — the event that triggered it, the failure mode observed, and the correction applied.
+
+    **Indexed by:** `LEARNINGS.md`
+
+    **Naming:** `YYYY-MM-DD-topic-slug.md` — e.g., `2026-06-27-delegation-failure.md`
+  </Accordion>
+  <Accordion title="snapshots/ — Immutable recovery checkpoints">
+    Every time `STATE.md` is overwritten, the previous version is snapshotted here with a timestamp filename. This ensures no operational state is ever permanently lost. The agent can recover any previous state by loading the snapshot at the appropriate timestamp.
+
+    **Indexed by:** `STATE.md`
+
+    **Naming:** `YYYY-MM-DDTHH-MM-SS.md` — e.g., `2026-06-27T14-30-00.md`
+  </Accordion>
+  <Accordion title="audits/ — Cross-cutting audit records">
+    Security audits, code reviews, quality checks, and other assessments land here. Because audits are relevant to both current system health and to durable learnings, `audits/` is indexed by two state files: `STATE.md` and `LEARNINGS.md`. This is a concrete example of the mesh — one audit entry, two consumers, no duplication.
+
+    **Indexed by:** `STATE.md`, `LEARNINGS.md`
+
+    **Naming:** `YYYY-MM-DD-type-slug.md` — e.g., `2026-06-27-security-audit.md`
+  </Accordion>
+  <Accordion title="proposals/ — Plan evolution records">
+    When a significant plan change is proposed or when a planning decision needs a durable record, it goes here. `PLAN.md` holds the current phased plan; `proposals/` holds the history of how the plan evolved and what alternatives were considered.
+
+    **Indexed by:** `PLAN.md`
+
+    **Naming:** `YYYY-MM-DD-topic-slug.md` — e.g., `2026-06-27-api-redesign.md`
+  </Accordion>
+  <Accordion title="setup/ — Tool installation records">
+    When a new tool is installed, configured, or a significant infrastructure change is made, the setup record goes here. `TOOLS.md` holds the current capability registry; `setup/` holds the installation history so the agent can trace how any tool was configured and reproduce that configuration if needed.
+
+    **Indexed by:** `TOOLS.md`
+
+    **Naming:** `YYYY-MM-DD-tool-name.md` — e.g., `2026-06-27-caddy-setup.md`
+  </Accordion>
+  <Accordion title="artifacts/ — Generated outputs and evidence">
+    Generated files, reports, specs, and deliverables produced during agent work. The filename preserves the date and a descriptive name. Because artifacts are relevant to both the current project state and to the artifact inventory, `artifacts/` is indexed by both `STATE.md` and `ARTIFACTS.md`.
+
+    **Indexed by:** `STATE.md`, `ARTIFACTS.md`
+
+    **Naming:** `YYYY-MM-DD-name.ext` — e.g., `2026-06-27-inventory.json`
+  </Accordion>
+</AccordionGroup>
+
+## Entry template formats
+
+Each history directory ships with an `ENTRY.template.md`. The YAML frontmatter IS the field specification — copy it, rename it, and fill in the values.
+
+<Tabs>
+  <Tab title="completed/">
+    ```markdown
+    # Completed Work Entry
+
+    ## Task
+
+    | Field | Value |
+    |-------|-------|
+    | Task ID | {{TASK_ID}} |
+    | Description | {{TASK_DESCRIPTION}} |
+    | Project | {{PROJECT}} |
+    | Started | {{START_DATE}} |
+    | Completed | {{COMPLETION_DATE}} |
+    | Authority | {{AUTHORITY}} |
+
+    ## Result
+
+    {{RESULT_SUMMARY}}
+
+    ## Evidence
+
+    | Evidence | Path / URL |
+    |----------|------------|
+    | {{EVIDENCE_1}} | {{EVIDENCE_PATH_1}} |
+
+    ## Learnings
+
+    - {{LEARNING_1}}
+
+    ## Follow-up
+
+    - {{FOLLOW_UP_1}}
+    ```
+  </Tab>
+  <Tab title="snapshots/">
+    ```yaml
+    ---
+    date: {{DATE}}
+    agent: {{AGENT_NAME}}
+    version: {{AGENT_VERSION}}
+    status: {{STATUS}}
+    ---
+    ```
+
+    ```markdown
+    # Snapshot — {{DATE}}
+
+    ## State at snapshot
+
+    {{STATE_SUMMARY}}
+
+    ## Active objective
+
+    {{ACTIVE_OBJECTIVE}}
+
+    ## Blockers
+
+    {{BLOCKERS}}
+
+    ## Next action
+
+    {{NEXT_ACTION}}
+    ```
+  </Tab>
+  <Tab title="journal/">
+    ```yaml
+    ---
+    date: {{DATE}}
+    turn: {{TURN_ID}}
+    objective: {{TURN_OBJECTIVE}}
+    ---
+    ```
+
+    ```markdown
+    # Journal Entry — {{DATE}}
+
+    ## Context before
+
+    {{CONTEXT_BEFORE}}
+
+    ## Actions taken
+
+    {{ACTIONS}}
+
+    ## Result
+
+    {{RESULT}}
+
+    ## Next
+
+    {{NEXT_CONTEXT}}
+    ```
+  </Tab>
+  <Tab title="artifacts/">
+    ```yaml
+    ---
+    date: {{DATE}}
+    name: {{ARTIFACT_NAME}}
+    type: {{TYPE}}
+    ---
+    ```
+
+    ```markdown
+    # Artifact — {{ARTIFACT_NAME}}
+
+    ## Description
+
+    {{DESCRIPTION}}
+
+    ## Path
+
+    `artifacts/{{FILENAME}}`
+
+    ## Generated by
+
+    {{GENERATED_BY}}
+    ```
+  </Tab>
+</Tabs>
+
+## The never-modify rule
+
+<Warning>
+  History directories are append-only. Old entries are never modified, renamed, or deleted. If an entry was wrong, write a correction entry — do not edit the original. This invariant is what makes history trustworthy.
+</Warning>
+
+The agent enforces this rule explicitly:
+
+- **Do not overwrite history files.** Append only.
+- **Do not update state without preserving the old version.** Snapshot before overwriting `STATE.md`.
+- **Do not mark tasks complete without evidence.** A passing test, an artifact, a commit, or a review satisfies this requirement.
+
+## How history pairs with state
+
+State files and history directories work in pairs. Each history directory is the durable record for a specific state file. When state is overwritten, history grows.
+
+```text
+STATE.md is overwritten
+  └─→ old value snapshotted to snapshots/YYYY-MM-DDTHH-MM-SS.md
+  └─→ STATE.md now holds the new current value
+
+TODO.md task completed
+  └─→ entry appended to completed/YYYY-MM-DD-task-slug.md
+  └─→ task removed from TODO.md (no gaps, renumbered)
+  └─→ SNAPSHOT.md updated with new deliverable
+
+LEARNINGS.md updated with new rule
+  └─→ full reflection appended to reflections/YYYY-MM-DD-topic-slug.md
+  └─→ LEARNINGS.md holds only the distilled reusable rule
+```
+
+This pairing is what prevents Continuity drift. Reality changes → state is updated → old state is preserved in history → agent can trace any past value without loading state files that have grown too large.
+
+<Tip>
+  Git and history directories are complementary layers. Git provides byte-level diff and verifiable provenance at the commit level. History directories provide agent-readable semantic history organized by concern. Use both.
+</Tip>

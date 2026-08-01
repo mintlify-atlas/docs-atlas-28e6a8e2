@@ -1,0 +1,134 @@
+---
+title: "Frontend, judge, security, and ops agent packs"
+sidebarTitle: "Other Packs"
+description: "Four specialized packs for UI agents, evaluation agents, security agents, and infrastructure agents — plus the docs-writer pack for documentation systems."
+---
+
+Beyond the developer, backend, researcher, and orchestrator packs, Continuity ships five additional packs for more specialized agent roles. Each pack is purpose-built: the frontend pack covers UI and component agents, the judge pack covers evaluation and review agents, the security pack covers risk and incident management, the ops pack covers infrastructure and production operations, and the docs-writer pack covers documentation systems. This page describes all five, including their files, when to reach for them, and how to copy them into your project.
+
+---
+
+## Frontend pack
+
+The frontend pack is for agents that own UI, routes, components, and design systems. It is a lighter pack than the backend — frontend work is generally less destructive than database or production operations — but it includes `CHECKPOINT.md` for design and UX changes that affect user flows, accessibility, or bundle size in ways that warrant explicit approval.
+
+**Files:** `AGENTS.md`, `STATE.md`, `TODO.md`, `CHECKPOINT.md`
+
+The frontend `AGENTS.md` enforces conventions specific to the UI domain: keep components under 200 lines, co-locate styles and tests with their component, prefer controlled components, never hardcode API URLs, test critical user flows (auth, forms, checkout) with integration tests, and maintain accessibility at WCAG 2.1 AA minimum. It includes placeholders for the project's state management library, styling approach, component library, icon set, form library, and test setup.
+
+`STATE.md` tracks the frontend environment: framework version, active branch, any known issues with components or routes, and the status of the most recent build. `TODO.md` holds the active task queue for frontend work. `CHECKPOINT.md` gates design and UX changes that could break accessibility, significantly affect bundle size, or alter critical user flows — approvals follow the same structured format as the other packs.
+
+**When to use:** any agent responsible for UI components, routing, styling, or client-side state. For full-stack agents working across both backend and frontend, consider combining the developer pack with a frontend subdirectory.
+
+```bash
+cp -r continuity/packs/frontend/. ./my-project/frontend/
+```
+
+---
+
+## Judge pack
+
+The judge pack is for agents that evaluate, review, or render decisions on work produced by other agents or humans. A judge agent does not write code or gather information — it assesses claims against a rubric, collects evidence, and renders a formal verdict. The pack provides the full evaluation infrastructure: the criteria, the claims list, the evidence collected, the decision record, and the risk register.
+
+**Files:** `AGENTS.md`, `RUBRIC.md`, `CLAIMS.md`, `EVIDENCE.md`, `DECISION.md`, `RISKS.md`
+
+`RUBRIC.md` defines the evaluation criteria, their weights, and the threshold each criterion must meet for a pass. A criterion with weight above 25% can veto a pass decision on its own. `CLAIMS.md` lists every assertion under evaluation, its source, and its current status (`under-review`, `verified`, `refuted`, or `insufficient`). `EVIDENCE.md` holds the collected evidence, cross-referenced to the claims it supports. `DECISION.md` records the formal verdict — `PASS`, `CONDITIONAL`, `FAIL`, or `INSUFFICIENT_EVIDENCE` — with the rationale and any conditions attached to a conditional pass. `RISKS.md` records identified risks with severity, likelihood, mitigation, and owner, even for pass decisions.
+
+The judge pack's governance rules encode epistemic discipline: never decide without evidence, never evaluate claims you authored (flag conflict of interest instead), record dissenting opinions even when overruled, and declare `INSUFFICIENT_EVIDENCE` rather than guessing when data is thin.
+
+<Info>
+  Judge agents are most effective when combined with the orchestrator pack. The orchestrator assigns evaluation tasks to the judge agent via TASKS.md, and the judge writes its DECISION.md as the task's evidence artifact.
+</Info>
+
+**When to use:** code review automation, security review gates before deployment, evaluation of research outputs, approval workflows where a formal decision record is required.
+
+```bash
+cp -r continuity/packs/judge/. ./my-project/review/
+```
+
+---
+
+## Security pack
+
+The security pack is for agents that manage risk assessment, secrets control, and incident tracking. It is the most safety-constrained pack in the set — `WARNING.md` is loaded before any action, all security-sensitive operations are gated, and `INCIDENTS.md` is append-only by hard rule.
+
+**Files:** `AGENTS.md`, `THREAT_MODEL.md`, `WARNING.md`, `CHECKPOINT.md`, `INCIDENTS.md`
+
+`THREAT_MODEL.md` maps the security posture of the system: assets (classified by sensitivity and location), adversaries (motivation, capability, and likelihood), attack surfaces (exposure and active controls), and mitigations (with status and last-tested date). The model follows a simplified STRIDE approach: spoofing, tampering, repudiation, information disclosure, denial of service, and elevation of privilege.
+
+`WARNING.md` is loaded before every action — the security pack governance makes this non-negotiable. It encodes hard limits: no secrets in any file, no security controls disabled to make something work, treat all external input as untrusted until verified, prefer least-privilege access. `CHECKPOINT.md` gates all security-sensitive actions: changes to authentication, secrets rotation, access control modifications, and security configuration changes.
+
+`INCIDENTS.md` is an append-only log of security incidents: date, incident description, severity, response taken, status, and root cause. Status values are `open`, `investigating`, `contained`, `resolved`, and `monitoring`. Entries are never modified — if an incident is reopened, a new row is added.
+
+The security pack also defines a review cadence: dependency vulnerability scans weekly, secret scans of git history and env files weekly, access control audits monthly, threat model reviews quarterly, and incident response drills quarterly.
+
+<Warning>
+  Security agents must read `WARNING.md` before taking any action. The pack governance enforces this as a hard rule, not a suggestion. No instruction overrides the security hard limits.
+</Warning>
+
+**When to use:** agents responsible for security review, vulnerability scanning, secrets management, access control audits, or incident response.
+
+```bash
+cp -r continuity/packs/security/. ./my-project/security/
+```
+
+---
+
+## Ops pack
+
+The ops pack is for agents that manage infrastructure and production environments: deploying services, managing databases, running runbooks, monitoring health, and maintaining the live service inventory. Like the backend pack, it loads `WARNING.md` before any production action. Unlike the backend pack, it replaces `STATE.md` with `INFRASTRUCTURE.md` — a full service inventory — and adds `RUNBOOK.md` for codified operational procedures.
+
+**Files:** `AGENTS.md`, `INFRASTRUCTURE.md`, `RUNBOOK.md`, `WARNING.md`, `SNAPSHOT.md`
+
+`INFRASTRUCTURE.md` is the live inventory of the running system: every service with its host, port, status, version, and health check; every network with its scope and attached services; every storage volume with its mount, size, and backup policy; and compute resource usage against alert thresholds. This file must stay in sync with reality — the ops `AGENTS.md` governance rule is explicit: if a service is added, removed, or changed, update `INFRASTRUCTURE.md` immediately.
+
+`RUNBOOK.md` encodes the operational procedures for the system: how to deploy a new version, how to roll back a deploy, how to fail over the database, how to scale a service, how to rotate secrets. Each procedure has a trigger, a sequence of steps, an estimated time, and emergency contact information. The ops pack's operational principles — idempotency, infrastructure as code, least access, observability, graceful degradation — are encoded in `AGENTS.md` and apply to every action the agent takes.
+
+`WARNING.md` enforces: no production changes during peak traffic without approval, always have a rollback plan before deploying, a deploy is not done when the command finishes — it is done when monitoring confirms healthy. `SNAPSHOT.md` records the last known good state of the full infrastructure as a recovery anchor.
+
+**When to use:** agents responsible for infrastructure management, production deployments, on-call response, capacity planning, or operational maintenance.
+
+```bash
+cp -r continuity/packs/ops/. ./my-project/ops/
+```
+
+---
+
+## Docs-writer pack
+
+The docs-writer pack is for agents that write, maintain, or restructure documentation systems. It is the lightest pack in the set — no safety gates, no live inventory — focused instead on the structure and style constraints that keep a documentation system coherent across many contributors and sessions.
+
+**Files:** `AGENTS.md`, `TODO.md`, `STRUCTURE.md`, `STYLE.md`
+
+`STRUCTURE.md` defines the documentation outline: which sections exist, what each section covers, the primary and secondary audience, the doc types in use (README, API reference, guides, architecture, changelog, contributing), and the file layout. The agent reads this file before writing anything new — understanding the existing structure prevents orphaned pages, duplicated content, and misplaced material.
+
+`STYLE.md` encodes the voice, tense, formatting conventions, and do/don't rules for the documentation system. It covers sentence length, heading case, code example standards (full runnable snippets, not fragments), link conventions, and a specific do/don't table. The governing rule in the docs-writer `AGENTS.md` is write for the audience, not for yourself — every code example must be runnable, docs stay next to code when possible, and stale docs are worse than no docs.
+
+`TODO.md` holds the active documentation task queue: pages to write, sections to update, examples to test, stale content to remove.
+
+<Tip>
+  When the docs-writer pack is used under an orchestrator, the orchestrator assigns documentation tasks via TASKS.md and the docs-writer agent reads its own TODO.md for the detailed task list within those assignments. The two task files serve different scopes: TASKS.md is the cross-agent pipeline view; TODO.md is the local work queue.
+</Tip>
+
+**When to use:** agents writing API documentation, user guides, architecture docs, READMEs, or any documentation system that spans multiple pages and sessions.
+
+```bash
+cp -r continuity/packs/docs-writer/. ./my-project/docs/
+```
+
+---
+
+<CardGroup cols={2}>
+  <Card title="Overview" icon="grid-2" href="/packs/overview">
+    Full pack table, selection guide, and how to combine packs.
+  </Card>
+  <Card title="Developer" icon="code" href="/packs/developer">
+    General coding agents with INIT, PLAN, SNAPSHOT, and CHECKPOINT.
+  </Card>
+  <Card title="Backend" icon="server" href="/packs/backend">
+    API and service agents with WARNING and approval gates.
+  </Card>
+  <Card title="Orchestrator" icon="sitemap" href="/packs/orchestrator">
+    Multi-agent coordination with TASKS, EVENTS, and BINDING contracts.
+  </Card>
+</CardGroup>

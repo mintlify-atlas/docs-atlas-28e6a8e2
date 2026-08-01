@@ -1,0 +1,106 @@
+---
+title: "Developer pack: state files for coding agents"
+sidebarTitle: "Developer"
+description: "The developer pack gives a general-purpose coding agent everything it needs: task queue, project truth, phased plan, snapshot, and approval gates."
+---
+
+The developer pack is the default starting point for any agent that writes, modifies, or reviews code across a project. It covers the full lifecycle of a coding session: reconstituting context from the last session, tracking the current project state, planning work in phases, recording a snapshot of the last known good configuration, and gating risky operations behind explicit approval. The pack ships with seven files that work together as a chain — each file has a clear role and a clear owner.
+
+## Files in this pack
+
+| File | Role |
+|------|------|
+| `AGENTS.md` | Entry point and governance contract |
+| `INIT.md` | Reconstitution procedure for session start |
+| `STATE.md` | Current project truth |
+| `TODO.md` | Active task queue |
+| `PLAN.md` | Phased plan with goals, steps, and risks |
+| `SNAPSHOT.md` | Last known good state |
+| `CHECKPOINT.md` | Approval gates for high-risk actions |
+
+### AGENTS.md
+
+The entry file the agent loads first. It defines the load order for the entire state chain, sets the coding standards for the project (language, linter, formatter, test framework), and encodes durable governance rules: read `STATE.md` before acting, commit after every meaningful change, write tests for new code, keep functions under 50 lines, handle errors explicitly. The runtime entry file — whether `AGENTS.md`, `CLAUDE.md`, or another adapter — is the root of authority for the project.
+
+### INIT.md
+
+The reconstitution procedure the agent runs at the start of every session. It walks through a checklist: read `AGENTS.md`, read `STATE.md` to confirm the environment still matches the last recorded reality, read `TODO.md` for the next valid action, read `SNAPSHOT.md` to catch any drift, run the test suite once to confirm the environment is clean, and then declare `READY`, `READY_WITH_WARNINGS`, or `BLOCKED`. If drift is detected — a changed branch, a failing test, a missing dependency — `INIT.md` defines how to investigate before correcting.
+
+### STATE.md
+
+The single source of truth for current project reality. It records the status (`READY` or `BLOCKED`), the active branch, the environment configuration (language, framework, runtime version, test command, lint command, build command), what is true right now about the codebase, and any active blockers. The agent reads this file before every meaningful action and updates it after every meaningful change.
+
+### TODO.md
+
+The active task queue, split into active items and pending items. Tasks move from pending to active when they are in flight, and out of the file entirely when completed — done items go into the `completed/` directory, not into a strikethrough section. The absence of an item is the signal that it is done; presence means it is still live.
+
+### PLAN.md
+
+A phased plan that gives the agent a goal, a sequence of steps, identified risks with mitigations, dependencies, and a definition of done. For small tasks the agent may skip `PLAN.md` entirely. For large features — multiple files, multiple sessions, coordinated changes — `PLAN.md` is the map that prevents drift between sessions.
+
+### SNAPSHOT.md
+
+A timestamped record of the last known good state: branch, commit hash, test results, lint status, and any notes needed to restore the environment from scratch. The agent refreshes this after every successful work session. If the environment breaks and `STATE.md` is unclear, `SNAPSHOT.md` provides a stable reference point for recovery.
+
+### CHECKPOINT.md
+
+An approval gate file that lists categories of action that require explicit human confirmation before proceeding. The gate categories are: destructive operations, irreversible changes, external actions, security-sensitive changes, framework or runtime upgrades, and large refactors (more than 5 files or 500 lines). When an action falls into any of these categories, the agent stops, formats a structured approval request, and waits. It does not proceed on assumption.
+
+## How a coding agent uses this pack across sessions
+
+At the start of a session, the agent loads the state chain in order: `AGENTS.md` → `INIT.md` → `STATE.md` → `TODO.md`. It runs the test suite to verify the environment, declares its status, and picks up the first active task from `TODO.md`. For high-risk work, it additionally loads `CHECKPOINT.md` before taking any action that matches a gate.
+
+During work, the agent commits after each meaningful change, keeps `STATE.md` in sync with reality, and moves completed tasks out of `TODO.md` into `completed/`. When a session ends successfully, it refreshes `SNAPSHOT.md` with the latest branch, commit, and test results.
+
+If the agent starts a session and finds drift — `STATE.md` says `main` but the branch is `feature/auth`, or tests are failing when `SNAPSHOT.md` says they were passing — it investigates before correcting. Silent overwrites are not allowed.
+
+## Copying the developer pack
+
+```bash
+# Copy all developer pack files into your project directory
+cp -r continuity/packs/developer/. ./my-project/
+
+# Or copy individual files
+cp continuity/packs/developer/AGENTS.md ./my-project/
+cp continuity/packs/developer/INIT.md   ./my-project/
+cp continuity/packs/developer/STATE.md  ./my-project/
+cp continuity/packs/developer/TODO.md   ./my-project/
+cp continuity/packs/developer/PLAN.md   ./my-project/
+cp continuity/packs/developer/SNAPSHOT.md  ./my-project/
+cp continuity/packs/developer/CHECKPOINT.md ./my-project/
+```
+
+## Common placeholders
+
+After copying, replace every `{{PLACEHOLDER}}` in the files:
+
+| Placeholder | Meaning | Example |
+|-------------|---------|---------|
+| `{{PROJECT_NAME}}` | Project name used in file headings | `auth-service` |
+| `{{LANGUAGE}}` | Primary language and version | `TypeScript 5.4` |
+| `{{FRAMEWORK}}` | Framework | `Next.js 14` |
+| `{{LINTER}}` | Linter command | `eslint` |
+| `{{FORMATTER}}` | Formatter command | `prettier` |
+| `{{TEST_FRAMEWORK}}` | Test framework | `vitest` |
+| `{{TEST_COMMAND}}` | Full test command | `npm test` |
+| `{{BRANCH}}` | Starting branch | `main` |
+| `{{DATE}}` | Today's date | `2026-06-29` |
+| `{{READY_OR_BLOCKED}}` | Initial status | `READY` |
+
+## When to extend with more files
+
+<Accordion title="Add MEMORY.md when learnings start to accumulate">
+  If the agent is making observations across sessions — patterns in the codebase, recurring bugs, preferences about architecture — add a `MEMORY.md` to index those durable facts. Link to a `memory/` directory for topic-organized detail files. Without a memory layer, useful context gets lost at session boundaries.
+</Accordion>
+
+<Accordion title="Add TOOLS.md when the environment grows complex">
+  If the agent is working with a large or unusual set of tools — custom scripts, external APIs, CLI tools, build pipelines — add a `TOOLS.md` to document what is available, how to invoke it, and what permissions it requires. This prevents the agent from rediscovering tool availability each session.
+</Accordion>
+
+<Accordion title="Add LEARNINGS.md when patterns emerge from repeated work">
+  For long-running projects where the agent has done many cycles of work, add `LEARNINGS.md` to record soft rules and insights: recurring failure modes, patterns that work well, things to avoid. This file is a distillation of experience, not a log. Write rules, not stories.
+</Accordion>
+
+<Accordion title="Add CONTEXT.md for high-velocity work">
+  During long multi-step operations, add a `CONTEXT.md` to track per-turn state: last action taken, current findings, next action planned. This file is volatile — it gets overwritten every turn — and gives the agent a quick orientation at the start of each reasoning step without re-reading the full state chain.
+</Accordion>

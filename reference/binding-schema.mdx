@@ -1,0 +1,332 @@
+---
+title: "BINDING.schema.json: machine-readable agent contracts"
+sidebarTitle: "Binding Schema"
+description: "The JSON Schema for recursive agent bindings — every field explained, a working example, and guidance on when Advanced-tier contracts apply."
+---
+
+`BINDING.schema.json` is the JSON Schema that defines the structure of a Continuity binding — a finite, machine-readable authorization for a recursive computation. A binding specifies who runs a computation, what the objective is, which tools are allowed, what resource budgets apply, and when the computation must stop. For agents that delegate work recursively — spawning child agents, subagents, or bounded subtasks — a binding is the contract that governs that delegation. This file lives at the workspace root and is an Advanced-tier feature.
+
+## Full schema
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Binding",
+  "description": "Finite authorization for a recursive computation",
+  "type": "object",
+  "required": [
+    "binding_id",
+    "who",
+    "what",
+    "budget",
+    "allowed_tools",
+    "stop_conditions"
+  ],
+  "properties": {
+    "binding_id": {
+      "type": "string",
+      "description": "Unique identifier"
+    },
+    "who": {
+      "type": "object",
+      "required": ["name", "role"],
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "parent": { "type": "string" }
+      }
+    },
+    "what": {
+      "type": "object",
+      "required": ["objective"],
+      "properties": {
+        "objective": { "type": "string" },
+        "success_criteria": { "type": "string" }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "properties": {
+        "max_seconds": { "type": "integer" },
+        "max_tokens": { "type": "integer" },
+        "max_turns": { "type": "integer" },
+        "max_depth": { "type": "integer" },
+        "max_disk_mb": { "type": "integer" }
+      }
+    },
+    "allowed_tools": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "checkpoint": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": ["manual", "scripted", "evidence"]
+        },
+        "triggers": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "required_evidence": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "validation_method": { "type": "string" }
+      }
+    },
+    "stop_conditions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "writeback": {
+      "type": "object",
+      "properties": {
+        "to": { "type": "string" },
+        "format": { "type": "string" }
+      }
+    }
+  }
+}
+```
+
+## Field reference
+
+### Top-level required fields
+
+<ParamField path="binding_id" type="string" required>
+  Unique identifier for this binding. Used to reference the binding in logs, audits, and parent-agent state files. Should be descriptive enough to identify the task at a glance.
+
+  **Example:** `"bind-auth-refactor-2026-06-27"`
+</ParamField>
+
+<ParamField path="who" type="object" required>
+  Identifies the agent running this binding — its name, operational role, and optional parent agent.
+
+  <Expandable title="who fields">
+    <ParamField path="who.name" type="string" required>
+      The name of the agent executing this binding.
+
+      **Example:** `"ResearchSubagent"`
+    </ParamField>
+
+    <ParamField path="who.role" type="string" required>
+      The operational role for this binding — what kind of work this agent performs.
+
+      **Example:** `"research agent"`, `"backend coder"`, `"security reviewer"`
+    </ParamField>
+
+    <ParamField path="who.parent" type="string">
+      The binding ID or name of the parent agent that delegated this work. Establishes the delegation chain for tracing and safety inheritance.
+
+      **Example:** `"bind-orchestrator-root"`, `"OrchestratorAgent"`
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="what" type="object" required>
+  Defines the objective of this binding and the criteria for considering it successfully completed.
+
+  <Expandable title="what fields">
+    <ParamField path="what.objective" type="string" required>
+      The specific goal this binding authorizes. Should be concrete and bounded — not "improve the codebase" but "refactor the JWT auth module to use RS256 tokens."
+
+      **Example:** `"Refactor src/auth/jwt.ts to use RS256 signing."`
+    </ParamField>
+
+    <ParamField path="what.success_criteria" type="string">
+      The observable condition that indicates the objective has been met. Used by the verification phase and by parent agents evaluating the result.
+
+      **Example:** `"All existing auth tests pass. No RS256-specific test regressions. PR created."`
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="allowed_tools" type="string[]" required>
+  The explicit list of tools this agent is authorized to use. Any tool not listed here is implicitly denied. This is the capability boundary of the binding.
+
+  **Example:** `["read_file", "write_file", "run_tests", "git_commit"]`
+</ParamField>
+
+<ParamField path="stop_conditions" type="string[]" required>
+  Conditions under which the agent must halt and report back to its parent, regardless of whether the objective is complete. Used to prevent runaway computation.
+
+  **Example:** `["budget exhausted", "test suite regression detected", "scope exceeds auth module"]`
+</ParamField>
+
+### Optional fields
+
+<ParamField path="budget" type="object">
+  Resource limits for this binding. All limits are enforced by the runtime — the agent must not exceed them regardless of whether the objective is complete.
+
+  <Expandable title="budget fields">
+    <ParamField path="budget.max_seconds" type="integer">
+      Maximum wall-clock seconds allowed for this binding.
+    </ParamField>
+
+    <ParamField path="budget.max_tokens" type="integer">
+      Maximum tokens the agent may consume across all turns.
+    </ParamField>
+
+    <ParamField path="budget.max_turns" type="integer">
+      Maximum number of reasoning turns the agent may take.
+    </ParamField>
+
+    <ParamField path="budget.max_depth" type="integer">
+      Maximum recursion depth — how many levels of child bindings may be spawned. Prevents unbounded delegation chains.
+    </ParamField>
+
+    <ParamField path="budget.max_disk_mb" type="integer">
+      Maximum disk space in megabytes the agent may write.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="checkpoint" type="object">
+  Configures the approval gate that governs when the agent must pause and seek human or parent-agent confirmation.
+
+  <Expandable title="checkpoint fields">
+    <ParamField path="checkpoint.type" type="string">
+      The checkpoint type. One of:
+      - `manual` — agent must pause and wait for explicit human approval
+      - `scripted` — a script or automated check runs and either clears or blocks
+      - `evidence` — the agent must produce a specified artifact before proceeding
+    </ParamField>
+
+    <ParamField path="checkpoint.triggers" type="string[]">
+      Conditions that activate the checkpoint. When any trigger is met, the agent halts until the checkpoint is cleared.
+
+      **Example:** `["before any destructive file write", "before database migration"]`
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="evidence" type="object">
+  Defines what artifacts or outputs must exist before the binding is considered complete. Enforces the Continuity evidence requirement: a task is complete only when a reviewable artifact exists.
+
+  <Expandable title="evidence fields">
+    <ParamField path="evidence.required_evidence" type="string[]">
+      List of artifacts or conditions that must exist when the binding concludes.
+
+      **Example:** `["passing test suite", "git commit with SHA", "SNAPSHOT.md updated"]`
+    </ParamField>
+
+    <ParamField path="evidence.validation_method" type="string">
+      How the evidence is validated — a command, a script path, or a description of the review process.
+
+      **Example:** `"run npm test and verify zero failures"`, `"./scripts/verify-binding.sh"`
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="writeback" type="object">
+  Specifies where and in what format the agent should write its result when the binding concludes.
+
+  <Expandable title="writeback fields">
+    <ParamField path="writeback.to" type="string">
+      The path where the result should be written.
+
+      **Example:** `"completed/2026-06-27-auth-refactor.md"`, `"STATE.md"`
+    </ParamField>
+
+    <ParamField path="writeback.format" type="string">
+      The format of the written result.
+
+      **Example:** `"completed-entry"`, `"state-update"`, `"json"`
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Example binding
+
+A complete binding for a bounded auth-refactor subtask:
+
+```json
+{
+  "binding_id": "bind-auth-refactor-2026-06-27",
+  "who": {
+    "name": "BackendSubagent",
+    "role": "backend coder",
+    "parent": "bind-orchestrator-root"
+  },
+  "what": {
+    "objective": "Refactor src/auth/jwt.ts to use RS256 signing instead of HS256.",
+    "success_criteria": "All existing auth tests pass. No RS256-specific regressions. PR branch created."
+  },
+  "budget": {
+    "max_seconds": 1800,
+    "max_tokens": 50000,
+    "max_turns": 30,
+    "max_depth": 1,
+    "max_disk_mb": 10
+  },
+  "allowed_tools": [
+    "read_file",
+    "write_file",
+    "run_tests",
+    "git_diff",
+    "git_commit"
+  ],
+  "checkpoint": {
+    "type": "evidence",
+    "triggers": [
+      "before modifying any file outside src/auth/",
+      "before committing"
+    ]
+  },
+  "evidence": {
+    "required_evidence": [
+      "passing test suite (npm test exits 0)",
+      "git commit SHA recorded in writeback"
+    ],
+    "validation_method": "run npm test and verify zero failures"
+  },
+  "stop_conditions": [
+    "budget exhausted",
+    "test suite regression with no clear fix path",
+    "scope expands outside src/auth/"
+  ],
+  "writeback": {
+    "to": "completed/2026-06-27-auth-refactor.md",
+    "format": "completed-entry"
+  }
+}
+```
+
+## Binding lifecycle
+
+A binding moves through seven phases from creation to release:
+
+```text
+POTENTIAL → BIND → RECURSE → COMPOSE → VERIFY → PERSIST → UNBIND
+```
+
+| Phase | What happens |
+|-------|-------------|
+| `POTENTIAL` | Capability exists but is not yet authorized |
+| `BIND` | Parent creates the binding; agent receives authorization |
+| `RECURSE` | Agent executes; may spawn child bindings (up to `max_depth`) |
+| `COMPOSE` | Results from child bindings are assembled |
+| `VERIFY` | Evidence is validated against `evidence.required_evidence` |
+| `PERSIST` | Results written to `writeback.to` |
+| `UNBIND` | Authorization released; binding is closed |
+
+## When to use
+
+<Info>
+  `BINDING.schema.json` is an **Advanced-tier** feature. Most agents do not need it. Use it when:
+
+  - An orchestrator agent spawns child agents with bounded scopes
+  - You need machine-readable enforcement of capability boundaries
+  - You need a verifiable audit trail of what each subagent was authorized to do
+  - You need `max_depth` controls to prevent unbounded recursive delegation
+
+  For single agents, `CHECKPOINT.md` and `WARNING.md` are sufficient. The binding schema is for recursive multi-agent delegation.
+</Info>
+
+For the full binding lifecycle, safety inheritance rules, and runtime integration details, see [Runtime Contracts](/advanced/runtime-contracts).

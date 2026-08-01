@@ -1,0 +1,192 @@
+---
+title: "Library directories: curated knowledge stores"
+sidebarTitle: "Library Directories"
+description: "The `memory/` and `knowledge/` library directories — schema, namespaces, delivery types, and why they must never be merged."
+---
+
+Library directories are the curated knowledge stores of Continuity. Unlike history directories — which are append-only and grow monotonically — library directories are maintained over time: entries can be added, updated, or retired as facts change. There are two library directories: `memory/` for structured memory entries with a schema and index, and `knowledge/` for topic-organized reference documents. They serve different purposes and must be kept separate.
+
+## The two library directories
+
+| Directory | Class | Naming pattern | Indexed by | Has schema? |
+|-----------|-------|---------------|------------|-------------|
+| `memory/` | Library | `namespace-topic-slug.md` | `MEMORY.md` | Yes (`SCHEMA.md`) |
+| `knowledge/` | Library | `topic-slug.md` | `KNOWLEDGE.md` | No |
+
+## memory/ — Structured memory entries
+
+The `memory/` directory holds durable facts organized by topic and namespace. Each entry is a structured Markdown file with YAML frontmatter that defines its metadata, trust tier, and retention policy. The directory also contains `INDEX.md` (a manifest of all entries with tags and mesh connections) and `SCHEMA.md` (the full frontmatter specification).
+
+### Directory structure
+
+```text
+memory/
+├── INDEX.md           ← Manifest — all entries, tags, mesh connections
+├── SCHEMA.md          ← Schema definition — full frontmatter spec
+└── entries/
+    └── YYYY-MM-DD-namespace-tag-description.md
+```
+
+<Note>
+  In practice, entries are commonly organized by namespace subdirectory:
+  `memory/semantic/`, `memory/procedural/`, `memory/episodic/`, `memory/working/`
+</Note>
+
+### Entry naming
+
+Memory entries follow the pattern `namespace-topic-slug.md`. Examples:
+- `semantic-server-ip.md` — a durable fact about server identity
+- `procedural-caddy-deploy.md` — a reusable deployment method
+- `episodic-transfer-2026-06-16.md` — a significant past event
+- `working-current-auth-task.md` — temporary working context
+
+### Entry schema (YAML frontmatter)
+
+Every memory entry uses this frontmatter structure:
+
+```yaml
+---
+uid: mem-{namespace}-{topic}
+namespace: semantic|procedural|episodic|working
+topic: Short title
+tags: [tag1, tag2]
+source: URL or path
+confidence: 0.0-1.0
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+retention: permanent|long|medium|ephemeral
+---
+```
+
+### Namespaces
+
+| Namespace | Purpose | Example |
+|-----------|---------|---------|
+| `semantic` | Durable facts | "Server IP is 192.0.2.1" |
+| `procedural` | Reusable methods | "How to deploy via Caddy" |
+| `episodic` | Important events | "Transfer completed 2026-06-16" |
+| `working` | Temporary context | "Current task: fix webhook" |
+
+### Trust tiers
+
+| Tier | Meaning |
+|------|---------|
+| Verified | File or tool confirmed, confidence ≥ 0.9 |
+| Partner | Partner-echoed; cross-check before acting |
+| Extracted | Extracted from raw material |
+| Inferred | Assumed; confidence < 0.9 |
+
+### Delivery types
+
+Memory entries have two delivery types that control when they are loaded:
+
+<CardGroup cols={2}>
+  <Card title="Latent" icon="bolt">
+    **Auto-injected on boot.** These entries are loaded into the agent's context on every session start. Use for facts the agent needs available without searching — identity anchors, critical infrastructure facts, hard limits.
+  </Card>
+  <Card title="Working" icon="magnifying-glass">
+    **Search on demand.** These entries are retrieved when relevant, not pre-loaded. Use for facts the agent may need but does not need constantly — past events, reference procedures, domain-specific knowledge.
+  </Card>
+</CardGroup>
+
+### INDEX.md — The manifest
+
+`memory/INDEX.md` is the manifest of all entries in the `memory/` directory. It lists every entry with its tags and mesh connections. The index is what allows the agent to discover and navigate memory entries without reading every file. Update it whenever an entry is added, retired, or significantly changed.
+
+### Weekly surveillance routine
+
+The memory system requires periodic maintenance:
+
+<Steps>
+  <Step title="List entries">
+    List all entries in `memory/INDEX.md` to establish the full inventory.
+  </Step>
+  <Step title="Check staleness">
+    Flag working entries not updated in more than 30 days; flag episodic entries not updated in more than 90 days.
+  </Step>
+  <Step title="Check confidence">
+    Flag entries with confidence below 0.7 for review or removal.
+  </Step>
+  <Step title="Check orphans">
+    Identify entries in `INDEX.md` whose paths no longer exist.
+  </Step>
+  <Step title="Check duplicates">
+    Identify duplicate topics across namespaces.
+  </Step>
+  <Step title="Archive stale entries">
+    Move stale entries to `archive/memory/` rather than deleting.
+  </Step>
+  <Step title="Regenerate JSON index">
+    If using a JSON index for vector retrieval, regenerate `memory/index.json` from `INDEX.md`.
+  </Step>
+  <Step title="Log completion">
+    Append audit completion to `logs/events.jsonl`.
+  </Step>
+</Steps>
+
+## knowledge/ — Reference documents
+
+The `knowledge/` directory holds topic-organized reference documents: research reports, external documentation excerpts, domain notes, and curated reference material. Unlike `memory/`, it has no `INDEX.md`, no `SCHEMA.md`, and no YAML frontmatter requirement. It is structured by topic, not by date.
+
+### Directory structure
+
+```text
+knowledge/
+├── api-rate-limits.md
+├── auth-patterns.md
+├── deployment-runbook.md
+└── ...
+```
+
+### Entry naming
+
+Knowledge entries follow the pattern `topic-slug.md`. Examples:
+- `api-rate-limits.md`
+- `auth-patterns.md`
+- `postgres-tuning.md`
+
+### Characteristics
+
+- **No schema.** Knowledge documents are free-form reference material — they don't require YAML frontmatter.
+- **No index.** `KNOWLEDGE.md` at the workspace root serves as the catalog. The `knowledge/` directory itself has no manifest file.
+- **Topic-organized, not date-organized.** Entries are named by topic, not by date. They can be updated in place as the reference material evolves.
+- **Curate freely.** Add documents when new reference material is discovered. Update in place when facts change. Retire when superseded.
+
+### Connected to
+
+`KNOWLEDGE.md` (the root state file) catalogs what exists in `knowledge/`. Update `KNOWLEDGE.md` when documents are added or superseded.
+
+## Memory vs Knowledge: key differences
+
+| Aspect | `memory/` | `knowledge/` |
+|--------|-----------|-------------|
+| **Structure** | Dated entries with YAML frontmatter | Topic-organized documents, free-form |
+| **Schema** | Yes — `SCHEMA.md` defines the spec | No schema required |
+| **Index** | Yes — `INDEX.md` is the manifest | No index; `KNOWLEDGE.md` is the catalog |
+| **Naming** | `namespace-topic-slug.md` | `topic-slug.md` |
+| **Update cadence** | On significant events | On research or discovery |
+| **Delivery** | Latent (auto-inject) or working (search) | Search on demand |
+| **Root state file** | `MEMORY.md` | `KNOWLEDGE.md` |
+| **Use case** | Durable facts, rules, events, working context | Reference docs, research, domain notes |
+
+### Layered memory architecture
+
+```text
+Layer           | What                          | Where                  | Mutability
+----------------|-------------------------------|------------------------|------------
+Native rules    | Auto-injected operational rules | MEMORY.md / runtime   | State (overwrite)
+Native user     | Auto-injected user profile    | USER.md / runtime      | State (overwrite)
+State files     | Current operational truth     | Root .md files         | State (overwrite)
+RAG entries     | Individual memory records     | memory/*.md            | Library (curate)
+Session DB      | Searchable session history    | Runtime-native         | History (append)
+Completed       | Finished task journal         | completed/*.md         | History (append)
+Knowledge       | Reference docs and research   | knowledge/*.md         | Library (curate)
+```
+
+<Warning>
+  **Do not merge `memory/` and `knowledge/`.** They serve different purposes and have different structures. Memory entries have a schema, a manifest, namespace organization, confidence scoring, and retention policies. Knowledge documents are free-form reference material organized by topic. Merging them destroys the schema and manifest that make memory entries searchable and maintainable.
+</Warning>
+
+<Tip>
+  The mesh pattern applies to both library directories. A `memory/semantic-server-ip.md` entry can be referenced by both `MEMORY.md` ("current server IP") and `KNOWLEDGE.md` ("infrastructure facts"). One file, two consumers — no duplication. See [Advanced: Mesh](/advanced/mesh) for the full mesh pattern.
+</Tip>

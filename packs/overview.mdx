@@ -1,0 +1,117 @@
+---
+title: "State Packs: role-specific agent configurations"
+sidebarTitle: "Overview"
+description: "State packs are cohesive sets of files pre-wired for a specific agent role — choose one, copy it, fill placeholders, and get a working state system."
+---
+
+A state pack is a curated collection of state files that work together as a coherent system for one operating mode. Unlike copying a single template, a pack gives you every file an agent in that role actually needs — the task queue, the safety rules, the snapshot, the approval gates — already cross-referenced and ready to instantiate. Pick the pack that matches your agent's role, copy the files into your project directory, replace the `{{PLACEHOLDERS}}`, and your agent has a complete state chain from day one.
+
+## Available packs
+
+| Pack | Purpose | Files |
+|------|---------|-------|
+| **developer** | General coding agent | AGENTS, INIT, STATE, TODO, PLAN, SNAPSHOT, CHECKPOINT |
+| **backend** | APIs, databases, auth, jobs | AGENTS, STATE, TODO, WARNING, CHECKPOINT |
+| **frontend** | UI, routes, components | AGENTS, STATE, TODO, CHECKPOINT |
+| **researcher** | Long-running research | AGENTS, STATE, TODO, MEMORY, KNOWLEDGE, LEARNINGS |
+| **judge** | Evaluation and review | AGENTS, RUBRIC, CLAIMS, EVIDENCE, DECISION, RISKS |
+| **security** | Risk and secrets control | AGENTS, THREAT\_MODEL, WARNING, CHECKPOINT, INCIDENTS |
+| **ops** | Infrastructure and production | AGENTS, INFRASTRUCTURE, RUNBOOK, WARNING, SNAPSHOT |
+| **orchestrator** | Multi-agent coordination | AGENTS, TASKS, PLAN, EVENTS, SNAPSHOT, BINDING.schema.json |
+| **docs-writer** | Documentation systems | AGENTS, TODO, STRUCTURE, STYLE |
+
+## Selection guide
+
+| If your agent... | Use this pack |
+|-----------------|--------------|
+| Writes code across the stack | **developer** |
+| Owns APIs, databases, or backend services | **backend** |
+| Owns UI, routes, or components | **frontend** |
+| Gathers information over multiple sessions | **researcher** |
+| Evaluates, reviews, or approves work | **judge** |
+| Manages security, secrets, or incidents | **security** |
+| Manages infrastructure or production | **ops** |
+| Coordinates other agents | **orchestrator** |
+| Writes or maintains documentation | **docs-writer** |
+
+## How to use a pack
+
+<Steps>
+  <Step title="Choose a pack">
+    Match your agent's primary responsibility to the pack in the selection guide above. If the agent straddles two roles, pick the pack that covers the riskiest operations — you can always add files from a second pack afterward.
+  </Step>
+  <Step title="Copy the files">
+    Copy all files from the pack directory into your project directory. Keep the filenames as-is — AGENTS.md is the universal entry point, and the state chain is wired by filename convention.
+
+    ```bash
+    cp -r continuity/packs/developer/. ./my-project/
+    ```
+  </Step>
+  <Step title="Fill the placeholders">
+    Every pack file contains `{{PLACEHOLDERS}}` for values specific to your project. Replace them before pointing your agent at the files.
+
+    | Placeholder | Meaning | Example |
+    |-------------|---------|---------|
+    | `{{PROJECT_NAME}}` | Project or service name | `auth-service` |
+    | `{{DATE}}` | Date stamp | `2026-06-29` |
+    | `{{READY_OR_BLOCKED}}` | Status declaration | `READY` |
+    | `{{BRANCH}}` | Current git branch | `main` |
+    | `{{BLOCKERS_OR_NONE}}` | Active blockers or `None` | `None` |
+  </Step>
+  <Step title="Point your agent to the entry file">
+    The entry file is whatever your runtime loads first: `AGENTS.md`, `CLAUDE.md`, `INIT.md`, `BOOT.md`, or another adapter file. Configure your runtime to load that file at the start of each session.
+  </Step>
+  <Step title="Delete what you don't need, add what you do">
+    Not every file in a pack will apply to every project. Remove files you won't use. If you need something not in the pack — `TOOLS.md`, `MEMORY.md`, `ARTIFACTS.md` — add it. Packs are starting points, not locked configurations.
+  </Step>
+</Steps>
+
+## Combining packs
+
+When an orchestrator agent coordinates multiple specialist agents, place the orchestrator pack at the root and each specialist pack in its own subdirectory. Each agent loads only its own state chain — agents never load sibling packs.
+
+```
+/AGENTS.md     /TASKS.md     /PLAN.md        # orchestrator pack at root
+├── backend/
+│   ├── AGENTS.md
+│   └── STATE.md                             # backend pack
+├── frontend/
+│   ├── AGENTS.md
+│   └── STATE.md                             # frontend pack
+└── research/
+    ├── AGENTS.md
+    └── MEMORY.md                            # researcher pack
+```
+
+The orchestrator reads its own `TASKS.md` to assign work. Each sub-agent reads its own `AGENTS.md` and follows its own state chain. Safety rules set at the root accumulate downward — a child pack cannot weaken a parent constraint.
+
+## Not a framework
+
+<Note>
+  Packs are markdown templates. They declare state; they do not enforce it. Your runtime, hooks, and review process handle enforcement. The pack gives you a wired starting point — the structure is in the files, not in code.
+</Note>
+
+Continuity only requires that the agent loads the right state chain and writes back changed state. How that loading and writeback happens — via a hook, a system prompt, a custom runtime, or a simple file read at session start — is entirely up to your infrastructure.
+
+## Pack pages
+
+<CardGroup cols={2}>
+  <Card title="Developer" icon="code" href="/packs/developer">
+    Coding agents with INIT, STATE, TODO, PLAN, SNAPSHOT, and CHECKPOINT.
+  </Card>
+  <Card title="Backend" icon="server" href="/packs/backend">
+    API and service agents with WARNING gates for data-destructive operations.
+  </Card>
+  <Card title="Researcher" icon="magnifying-glass" href="/packs/researcher">
+    Long-running research with MEMORY, KNOWLEDGE, and LEARNINGS layers.
+  </Card>
+  <Card title="Orchestrator" icon="sitemap" href="/packs/orchestrator">
+    Multi-agent coordination with TASKS, EVENTS, and machine-readable BINDING contracts.
+  </Card>
+  <Card title="Other Packs" icon="grid-2" href="/packs/other-packs">
+    Frontend, judge, security, ops, and docs-writer packs.
+  </Card>
+  <Card title="Tiers" icon="layer-group" href="/core/tiers">
+    Understand required, recommended, and optional file tiers before customizing a pack.
+  </Card>
+</CardGroup>

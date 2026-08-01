@@ -1,0 +1,116 @@
+---
+title: "The State/History/Library ontology explained"
+sidebarTitle: "Ontology"
+description: "Understand how Continuity classifies every file as State, History, or Library — and why the distinction prevents data loss."
+---
+
+Every file in a Continuity workspace belongs to one of three classes: **State**, **History**, or **Library**. This classification is not cosmetic — it determines where a file lives, whether it can be overwritten, and what question it answers at runtime. Getting this mental model right is the key to understanding everything else in the system.
+
+## The three classes at a glance
+
+| Class | Where | Mutability | What it answers |
+|-------|-------|------------|-----------------|
+| **State** | Root `.md` files | Overwrite in place | What IS |
+| **History** | Nested dirs (append-only) | Append, never modify | What WAS |
+| **Library** | Nested dirs (curated) | Add, update, remove | What is KNOWN |
+
+---
+
+## State
+
+State files live at the root of the workspace and hold a single current value. They are overwritten in place whenever reality changes — `STATE.md` reflects right now, not last week. `TODO.md` lists active tasks, not completed ones. `CONTEXT.md` captures this session, not the last.
+
+**What State files hold:**
+- The agent's current operational status and active objective
+- The working task list, ranked and actionable
+- The per-turn context snapshot that grounds each session
+- Identity anchors — who the agent is, who it serves, what it values
+
+**Naming:** all-caps root markdown files (`STATE.md`, `PLAN.md`, `IDENTITY.md`, `SOUL.md`, etc.)
+
+**Mutability rule:** overwrite freely. The previous value is not lost — it is preserved in the corresponding nested History directory before the root file is updated. Current value lives in the root. History accumulates in the nested dir.
+
+---
+
+## History
+
+History directories contain append-only records of past events. No entry is ever modified after it is written. Entries accumulate over time, building a verifiable record of what the agent observed, decided, and completed.
+
+**What History directories hold:**
+- Session snapshots (`snapshots/`) — restoration anchors capturing state at a point in time
+- Completed tasks (`completed/`) — done items moved out of `TODO.md` with evidence attached
+- Per-turn journals (`journal/`) — narrative record of what happened each cycle
+- Audit logs (`audits/`) — security scans, reconciliation events, system health records
+- Proposals (`proposals/`) — planning options that were considered
+- Setup records (`setup/`) — tool and infrastructure provisioning history
+- Artifacts (`artifacts/`) — generated outputs with provenance
+
+**Naming pattern:** date-prefixed, so entries sort chronologically and are unambiguous:
+
+```text
+snapshots/2026-06-27T14-30-00.md
+completed/2026-06-27-fix-webhook.md
+journal/2026-06-27-turn-3.md
+audits/2026-06-27-security-audit.md
+```
+
+**Mutability rule:** append only. Old entries are never modified. The directory grows forever; individual entries are immutable.
+
+---
+
+## Library
+
+Library directories hold curated, timeless knowledge — facts about the world, domain knowledge, semantic memory. Unlike History, Library entries can be added, updated, or removed as the underlying facts change. A server IP that changes should be updated, not appended.
+
+**What Library directories hold:**
+- Semantic memory (`memory/`) — durable facts the agent references across sessions
+- Knowledge documents (`knowledge/`) — curated documentation, reference material, domain expertise
+
+**Naming pattern:** topic-slug (no date prefix), reflecting that the content is timeless rather than time-bound:
+
+```text
+memory/semantic-server-ip.md
+memory/project-api-endpoints.md
+knowledge/api-rate-limits.md
+knowledge/deployment-runbook.md
+```
+
+**Mutability rule:** curate freely — add entries when you learn new facts, update them when facts change, remove them when they become obsolete. Library is a living reference, not an archive.
+
+---
+
+## No data lost
+
+The most important consequence of this taxonomy is that overwriting a State file never destroys information. Before `STATE.md` is updated, the previous version is written into `snapshots/` with a timestamp. Before a task is removed from `TODO.md`, it is moved to `completed/` with evidence. The root file always reflects the current truth. The nested directory always holds the full history.
+
+```markdown
+# State: STATE.md (overwrite in place)
+Status: READY
+Active objective: Deploy webhook
+
+# History: snapshots/2026-06-27T14-30-00.md (append, never modify)
+Previous state before webhook deployment
+
+# Library: memory/semantic-server-ip.md (curate freely)
+Server IP is 192.0.2.1
+```
+
+This is why the system can answer both "what is the agent doing right now?" (read the root State file) and "what was the agent doing last Tuesday?" (read the History directory) without any duplication or conflict.
+
+---
+
+## Meshability
+
+The taxonomy also governs how files can participate in the mesh — the many-to-many graph of cross-references between files and directories. Each class has a defined role in that graph:
+
+| Class | Can mesh? | Role |
+|-------|-----------|------|
+| **State** (root files) | Yes — outbound only | Indexes History and Library dirs; never indexed by others |
+| **History** (append-only dirs) | Yes — inbound only | Indexed by multiple State files; never indexes others |
+| **Library** (curated dirs) | Yes — bidirectional | Indexed by State files; can also index other Library dirs |
+
+A `snapshots/` entry (History class) can be referenced by both `STATE.md` and `LEARNINGS.md` — one file, two contexts, no duplication. A `memory/` entry (Library class) can serve both `MEMORY.md` and `KNOWLEDGE.md`. But a root State file like `STATE.md` is always the indexer, never the indexed.
+
+<Note>
+The mesh is explicit, not automatic. A State file must declare its edges in a "Mesh index" section for them to be active. No declaration means no edge — this prevents accidental cross-references from forming over time.
+</Note>

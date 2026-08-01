@@ -1,0 +1,202 @@
+---
+title: "Continuity adapters for Hermes, OpenClaw, and Agent Zero"
+sidebarTitle: "Other Runtimes"
+description: "Adapter notes for Hermes (progressive discovery), OpenClaw (SKILL.md security gates), and Agent Zero (prompt-include auto-injection)."
+---
+
+Continuity's file-based state model is runtime-agnostic: any agent that can read and write markdown files can use it. This page covers three runtimes — Hermes, OpenClaw, and Agent Zero — each of which has a distinct model for loading agent instructions and injecting context. A generic four-step setup is included at the end for runtimes not covered here.
+
+---
+
+## Hermes
+
+Hermes is an agent runtime developed by NousResearch. It uses `AGENTS.md` as its primary instruction file and progressively discovers local context files as the agent moves through a project, making it a natural fit for Continuity's scoped state chain model.
+
+### Entry file
+
+`AGENTS.md` — Hermes loads this file from the project root. As the agent descends into subdirectories, it discovers additional context files and composes them into the active state.
+
+### Setup
+
+Copy a Continuity pack into your project, then install the Continuity skill to the Hermes skills directory:
+
+```bash
+cp -R skills/continuity ~/.hermes/skills/continuity
+```
+
+Prompt Hermes to use the skill:
+
+```
+Use the continuity skill. Boot this project. If READY, continue with the top task in TODO.md.
+```
+
+Hermes can read and write files directly. After each session, update `STATE.md`, `TODO.md`, and `SNAPSHOT.md` in place.
+
+### Auto-injected instance files
+
+Hermes auto-injects three files from the Hermes home path (`~/.hermes/`) into every session — independently of the project-level state chain:
+
+| File | What it holds |
+|---|---|
+| `SOUL.md` | Agent essence, purpose, and constitution |
+| `MEMORY.md` | Durable facts index |
+| `USER.md` | Human model — who the agent is serving |
+
+Copy these files from your Continuity workspace to `~/.hermes/` to ensure they are auto-loaded on every Hermes session. These are **instance-level** state files — they persist across projects, unlike project-level files such as `STATE.md` or `TODO.md`.
+
+### Progressive discovery and AGENTS.promptinclude.md
+
+Hermes supports `AGENTS.promptinclude.md` for progressive discovery. Files listed there are injected into the agent's context on every session without manual loading. Use this to wire in your required-tier state files:
+
+```markdown
+# AGENTS.promptinclude.md
+
+@AGENTS.md
+@STATE.md
+@TODO.md
+@SNAPSHOT.md
+```
+
+### Security scanning
+
+Hermes supports security scanning during context loading. Use `CHECKPOINT.md` to define approval gates for high-risk or irreversible actions. `WARNING.md` carries the hard limits and pre-action checklists that Hermes evaluates before executing tasks.
+
+---
+
+## OpenClaw
+
+OpenClaw uses `SKILL.md` directories with explicit loading order, allowlists, and security gates. Its workspace template model — `BOOT`, `BOOTSTRAP`, `SOUL`, `IDENTITY`, `HEARTBEAT`, `TOOLS`, and `USER` — directly inspired Continuity's boot-and-identity file split.
+
+### Entry file
+
+`AGENTS.md` — OpenClaw uses `AGENTS.md` as the primary instruction file, composed via the skill's YAML config wrapper.
+
+### Setup
+
+Copy a Continuity pack into your project and install the skill:
+
+```bash
+cp -R skills/continuity ./.agents/skills/continuity
+```
+
+Create a YAML config wrapper that declares the entry file, boot file, tracked state files, writeback targets, and security rules:
+
+```yaml
+# continuity-agent.yaml
+entry_file: AGENTS.md
+boot_file: INIT.md
+state_files:
+  - STATE.md
+  - TODO.md
+  - SNAPSHOT.md
+writeback:
+  events: logs/events.jsonl
+  snapshots: snapshots/
+rules:
+  - do_not_write_secrets_to_markdown
+  - require_checkpoint_before_irreversible_actions
+```
+
+Prompt OpenClaw:
+
+```
+Boot project and continue next valid action.
+```
+
+### Boot and identity file split
+
+OpenClaw's native workspace template maps cleanly onto Continuity's file clusters:
+
+| OpenClaw file | Continuity equivalent | Cluster |
+|---|---|---|
+| `BOOT` | `BOOT.md` + `INIT.md` | Boot |
+| `BOOTSTRAP` | `BOOTSTRAP.md` | Boot |
+| `SOUL` | `SOUL.md` | Identity |
+| `IDENTITY` | `IDENTITY.md` | Identity |
+| `HEARTBEAT` | `HEARTBEAT.md` | State |
+| `TOOLS` | `TOOLS.md` | Capability |
+| `USER` | `USER.md` | Identity |
+
+If you are already using OpenClaw's native file structure, you can map your existing files onto Continuity templates without renaming — just add the missing State, Memory, and Safety cluster files.
+
+### Security gates
+
+OpenClaw's security gate system integrates directly with Continuity's safety cluster. Declare high-risk gates in `CHECKPOINT.md` and reference them from your YAML config's `rules` block. OpenClaw evaluates these gates before executing any action flagged as irreversible.
+
+---
+
+## Agent Zero
+
+Agent Zero does **not** auto-load `AGENTS.md` the way Codex or Hermes do. Instead, it uses a prompt-include system: files listed in `AGENTS.promptinclude.md` are injected into the agent's system prompt automatically on every session.
+
+### Entry file
+
+`AGENTS.md` — but loaded via `AGENTS.promptinclude.md` rather than auto-discovery. `AGENTS.promptinclude.md` is the effective trigger file for Agent Zero.
+
+### Setup
+
+Copy a Continuity pack into your project, then create `AGENTS.promptinclude.md` to wire in your state files:
+
+```markdown
+# AGENTS.promptinclude.md
+
+@AGENTS.md
+@STATE.md
+@TODO.md
+@SNAPSHOT.md
+```
+
+Prompt Agent Zero:
+
+```
+Read STATE.md and TODO.md. If READY, execute the next valid action.
+After work, update continuity files.
+```
+
+Agent Zero can read and write files via its built-in tools. After each session, update `STATE.md`, `TODO.md`, and `SNAPSHOT.md` in place.
+
+### Multi-agent subordinates
+
+For multi-agent work with Agent Zero, use the orchestrator pack. Each subordinate agent gets scoped access to its portion of the state chain. Use `BINDING.schema.json` to validate agent contracts before spawning subordinates — it defines who runs the computation, what tools are allowed, what the budget is, and when to stop.
+
+<Tip>
+  When using Agent Zero's subordinate system, nest state files per agent scope. Each subordinate gets its own `STATE.md` and `TODO.md` under its working directory. The root orchestrator's `AGENTS.md` governs the overall load order; subordinate-scoped files refine it without weakening parent safety rules.
+</Tip>
+
+---
+
+## Generic / other runtimes
+
+Any agent that can read markdown files can use Continuity. If your runtime is not listed above, follow these four steps:
+
+<Steps>
+  <Step title="Copy needed templates to your workspace">
+    Copy the templates matching your tier from the Continuity repo. The Minimum tier is enough for most agents:
+
+    ```bash
+    cp continuity/{AGENTS,IDENTITY,SELF,SOUL,STATE,INIT,TODO,SNAPSHOT}.md /your/workspace/
+    ```
+
+    Fill in all `{{UPPER_CASE}}` placeholders before booting.
+  </Step>
+  <Step title="Read AGENTS.md, then INIT.md, then files in load order">
+    Point your runtime at `AGENTS.md` as the entry file. On first boot, run the `INIT.md` nine-stage reconstitution procedure. After that, follow the load order declared in `AGENTS.md` at the start of every session.
+  </Step>
+  <Step title="Remove AGENTS.promptinclude.md if not needed">
+    `AGENTS.promptinclude.md` is only needed for runtimes that support auto-injection (Agent Zero, Cursor, Hermes). If your runtime handles file loading natively or you reference state files explicitly in your entry file, remove `AGENTS.promptinclude.md` to keep the workspace clean.
+  </Step>
+  <Step title="Implement writeback after each session">
+    After every meaningful action, update the files whose claims are no longer accurate:
+
+    - `STATE.md` — new operational truth
+    - `TODO.md` — task queue with completed items moved to `completed/`
+    - `SNAPSHOT.md` — refreshed restoration anchor
+    - `LEARNINGS.md` — if new insights emerged
+
+    Without writeback, Continuity degrades to static config. The feedback loop — read state, act, update state — is what makes it accumulate value across sessions.
+  </Step>
+</Steps>
+
+<Note>
+  The system is runtime-agnostic by design. The templates are plain markdown with `{{VARIABLES}}` placeholders. Any agent that reads files can boot from them; any agent that writes files can update them. The only hard requirement is that the agent follows its own specification — reads the state chain before acting and writes it back when reality changes.
+</Note>

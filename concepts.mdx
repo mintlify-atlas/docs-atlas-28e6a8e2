@@ -1,0 +1,135 @@
+---
+title: "Core concepts behind Continuity's state model"
+sidebarTitle: "Concepts"
+description: "The loop model, three-class ontology, self-updating feedback loop, state-as-code contract, and the division of responsibilities that make Continuity work."
+---
+
+Continuity is built on a small number of precise ideas. Understanding them makes the file structure obvious rather than arbitrary — every template, every naming rule, every mutability constraint follows from the concepts below. This page covers the mental models you need before working with the system in depth.
+
+## Loops are the units of intelligence
+
+An agent's intelligence does not live in a single prompt. It lives in repeated loops: **observe → reason → act → update state**. Intelligence compounds across iterations. Each loop refines what the agent knows and does.
+
+Without Continuity, every loop starts from zero. The agent re-discovers the project, re-orients to the current task, re-loads whatever context it can fit in a prompt. The loop is stateless — everything learned in iteration N evaporates before iteration N+1 begins.
+
+With Continuity, the loop **inherits**. It wakes up knowing what it observed, what it decided, what it is verifying against. The state file is the loop's memory across iterations.
+
+Each file type in the system exists to serve a specific loop:
+
+- `TODO.md` exists because the execution loop reads it before acting and writes to it after completing work
+- `IDENTITY.md` exists because the reasoning loop needs a stable anchor that does not change mid-session
+- `LEARNINGS.md` exists because the reflection loop accumulates soft rules that should influence future iterations
+- `SNAPSHOT.md` exists because the reconstitution loop needs a last-known-good state to restore from
+
+Remove a loop from your agent's design, and you can remove its state files. The file set is not decorative — it maps directly to the loops your agent actually runs.
+
+## Why a single file is not enough
+
+Many agents start with a single instruction file — `CLAUDE.md`, `AGENTS.md`, or a project-specific note. This works for small, simple agents. It breaks as the agent grows and its loops become more complex.
+
+<Accordion title="View the full comparison: single file vs. Continuity">
+
+| Limit | Single file | Continuity |
+|---|---|---|
+| **Length** | Grows until it exceeds the context budget | Split by concern — each file bounded and independently loadable |
+| **Loading** | All or nothing — load the whole file or skip it | Load only what you need — tiers, opt-out, on-demand |
+| **History** | Overwriting erases previous state permanently | Nested dirs preserve every prior value; git links every version |
+| **Concerns** | Identity, state, memory, and tasks share one file | Each concern has its own file with its own lifecycle and mutability rule |
+| **Composition** | One file serves one scope | Any file nests into any project — parent/child hierarchy |
+| **Relationships** | Linear text with no cross-references | Mesh: files index each other, many-to-many edges |
+
+</Accordion>
+
+The solution is not a bigger file — it is a structured ontology. You read `STATE.md` to find current status. You read `TODO.md` to find tasks. You read `MEMORY.md` for durable facts. Each concern is a separate file with its own lifecycle. When `STATE.md` grows too large for one context window, it splits into a root index plus nested per-project entries, each loadable independently.
+
+## The self-updating feedback loop
+
+The critical insight in Continuity is that **the agent writes these files, not just reads them**. Without self-updating, state files are just static config — useful documentation, but not a live system.
+
+The feedback loop works like this:
+
+1. Agent loads the minimal state chain needed for the current task
+2. Agent acts — executes work, makes decisions, completes tasks
+3. Agent writes back changed state:
+   - Updates `STATE.md` with new reality
+   - Moves completed tasks from `TODO.md` to `completed/`
+   - Appends insights to `LEARNINGS.md`
+   - Refreshes `SNAPSHOT.md`
+   - Commits
+
+On the next session, the reconstitution procedure (`INIT.md`) loads the updated files. The agent inherits the result of the previous session's work. The loop compounds.
+
+<Warning>
+If the agent only reads state files and never updates them, you do not have Continuity — you have documentation. The self-updating writeback is what separates a live cognitive system from a static folder of notes.
+</Warning>
+
+The system has a specific term for what happens when state files are not updated: **Continuity drift**. State claims become stale. The agent acts on outdated information. Drift is prevented by the post-action reconciliation rule: after a meaningful change, update every file whose claims are no longer accurate. If reality changed, state changes.
+
+## State-as-code
+
+State files are not passive documents — they are **executable contracts**. The agent maintains them because its own boot logic requires them to exist and be correct. The agent then follows its own specification as it runs.
+
+Consider `AGENTS.md`. It is the bootloader, runtime parameters, and project guard. It declares:
+
+- Which state files exist and what order to load them
+- What authority rules govern who can write what
+- What safety defaults constrain every action
+- What the load order is for nested project scopes
+
+When the agent reads `AGENTS.md` and sees "load `TODO.md` at start and check it before executing tasks," it does that — not because a human reminded it, but because that file is its own runtime specification. **Enforcement equals self-reference.** The state file declares what state exists; the agent follows its own specification as it runs.
+
+This means the quality of your state files directly determines the quality of your agent's behavior. A well-structured `WARNING.md` with a pre-action checklist is not a note to yourself — it is a constraint the agent enforces on every action cycle.
+
+<Tip>
+The three-class ontology formalizes the mutability contract embedded in every file:
+
+| Class | Where | Mutability | What it answers |
+|---|---|---|---|
+| **State** | Root `.md` files | Overwrite in place — current value replaces old | What IS |
+| **History** | Nested dirs (append-only) | Append — never modify old entries | What WAS |
+| **Library** | Nested dirs (curated) | Curate — add, update, remove as facts change | What is KNOWN |
+
+When `STATE.md` is overwritten, the old version lands in `snapshots/` first. Current value in the root. History in the nested directory. No data is lost.
+</Tip>
+
+## What Continuity gives you vs. what you provide
+
+Continuity defines the grammar. You define the language your agent speaks within it. The division is explicit:
+
+<Tabs>
+  <Tab title="What Continuity provides">
+    - Structured markdown templates for every major concern (identity, state, tasks, memory, tools, snapshots, safety)
+    - A scoping model — load `src/auth/STATE.md` instead of the global `STATE.md` when working in that module
+    - A nesting pattern — when files grow too large, split them into a root index plus nested per-scope entries
+    - A mesh concept — state files index nested directories as graph edges; one entry can serve multiple state files
+    - The three-class ontology — every file has a type, a location, and a mutability rule
+    - Git as the history and provenance layer
+    - Pre-wired state packs for common agent operating modes
+    - Thin runtime adapters for major agent frameworks
+  </Tab>
+  <Tab title="What you provide">
+    - **How the agent reads files** — `bash cat`, MCP, direct I/O, vector retrieval — your choice
+    - **How it writes** — same mechanism, your implementation
+    - **Validation** — JSON schema enforcement or trust-based — your call
+    - **Merge and conflict handling** — git's default three-way merge or a custom reconciliation strategy
+    - **Commit cadence** — automatic after every meaningful action, manual, or staged batches
+    - **Which files your agent actually needs** — match the file set to the loops you run, not to a checklist
+  </Tab>
+</Tabs>
+
+The boundary matters. Continuity does not execute code, manage processes, or prescribe tooling. It prescribes structure. The operator owns the plumbing. A minimal coding agent may only need `AGENTS.md`, `STATE.md`, and `TODO.md`. A multi-agent orchestration system may need `CHECKPOINT.md`, `TOOLS.md`, and `BINDING.schema.json`. The system scales in both directions.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Boot your first Continuity workspace in 60 seconds.
+  </Card>
+  <Card title="Tiers & File Selection" icon="layers" href="/core/tiers">
+    Pick the right tier and grow your file set only as your loops demand it.
+  </Card>
+  <Card title="State Packs" icon="box" href="/packs/overview">
+    Pre-wired file sets for developer, researcher, ops, orchestrator, and more.
+  </Card>
+  <Card title="Runtime Adapters" icon="plug" href="/adapters/overview">
+    Wire Continuity into your agent framework with a thin adapter file.
+  </Card>
+</CardGroup>

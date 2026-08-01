@@ -1,0 +1,128 @@
+{
+  "projectType": "general",
+  "projectName": "Continuity",
+  "projectDescription": "A file-based state system for AI agents that externalizes identity, memory, tasks, and context into structured versioned markdown files so agents persist across sessions.",
+  "theme": "luma",
+  "primaryColor": "#2E7D32",
+  "lightColor": "#4CAF50",
+  "darkColor": "#1B5E20",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "concepts"
+            ]
+          },
+          {
+            "group": "Core System",
+            "pages": [
+              "core/ontology",
+              "core/file-clusters",
+              "core/tiers",
+              "core/boot-sequence"
+            ]
+          },
+          {
+            "group": "Advanced Topics",
+            "pages": [
+              "advanced/nesting",
+              "advanced/mesh",
+              "advanced/runtime-contracts",
+              "advanced/vector-retrieval"
+            ]
+          },
+          {
+            "group": "State Packs",
+            "pages": [
+              "packs/overview",
+              "packs/developer",
+              "packs/backend",
+              "packs/researcher",
+              "packs/orchestrator",
+              "packs/other-packs"
+            ]
+          },
+          {
+            "group": "Runtime Adapters",
+            "pages": [
+              "adapters/overview",
+              "adapters/claude-code",
+              "adapters/codex",
+              "adapters/other-runtimes"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "operations/hooks",
+              "operations/scripts",
+              "operations/git-history"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "File Reference",
+        "groups": [
+          {
+            "group": "File Taxonomy",
+            "pages": [
+              "reference/overview",
+              "reference/state-files",
+              "reference/history-directories",
+              "reference/library-directories"
+            ]
+          },
+          {
+            "group": "Schema",
+            "pages": [
+              "reference/binding-schema",
+              "reference/placeholders",
+              "reference/anti-patterns"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Structured markdown templates externalizing AI agent state (identity, memory, tasks, context) into versioned files",
+    "Three-class ontology: State (current truth), History (append-only), Library (curated knowledge)",
+    "Four deployment tiers: Minimum, Standard, Full, Advanced — start small, grow only as needed",
+    "State Packs for 9 agent roles: developer, backend, frontend, researcher, judge, security, ops, orchestrator, docs-writer",
+    "Nesting model with parent-child scope resolution — any file nests into project subdirectories",
+    "Mesh: many-to-many edges between state files and nested directories so one entry serves multiple files",
+    "Runtime adapters for Claude Code, OpenAI Codex, Hermes, OpenClaw, Agent Zero",
+    "Git integration: every commit is a verifiable cognitive snapshot",
+    "Optional hooks for automating state-file reactions (webhooks, event logs, task moves)",
+    "BINDING.schema.json for machine-readable agent contracts in recursive multi-agent systems"
+  ],
+  "publicApiSurface": [
+    "AGENTS.md — bootloader, load order, runtime params, project guard",
+    "INIT.md — 9-stage reconstitution procedure",
+    "STATE.md — current operational truth (overwrite in place)",
+    "TODO.md — active task queue",
+    "MEMORY.md — durable facts index",
+    "KNOWLEDGE.md — curated reference knowledge",
+    "LEARNINGS.md — insights from completed work",
+    "SNAPSHOT.md — last known good state / restoration anchor",
+    "WARNING.md — hard limits and pre-action checklists",
+    "CHECKPOINT.md — approval gate before irreversible actions",
+    "BINDING.schema.json — machine-readable binding contract for recursive agents",
+    "SOUL.md / SELF.md / IDENTITY.md — three-surface identity model",
+    "completed/ — append-only task completion history",
+    "snapshots/ — immutable recovery checkpoints",
+    "memory/ — topic-organized durable facts",
+    "knowledge/ — topic-organized reference docs",
+    "scripts/init-agent.sh — scaffold directory generation",
+    "scripts/check-placeholders.sh — placeholder validation",
+    "hooks/hooks.example.yaml — optional automation configuration",
+    "packs/ — 9 role-specific state pack templates"
+  ]
+}

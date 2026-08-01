@@ -1,0 +1,202 @@
+---
+title: "Mesh: many-to-many state file relationships"
+sidebarTitle: "Mesh"
+description: "How CONTINUITY state files form a mesh by indexing shared directories, enabling one entry to serve multiple concerns without duplication."
+---
+
+The hierarchy connects parent state files to child state files in a tree. The mesh connects state files to shared nested directories in a graph. Where the hierarchy asks "which scope owns this file?", the mesh asks "which state files care about this directory entry?" A single audit log, a single artifact, or a single memory entry can be referenced by `STATE.md`, `LEARNINGS.md`, and `ARTIFACTS.md` simultaneously — each file interpreting the same content from its own perspective. This page explains how the mesh is declared, what patterns it enables, and when to use it.
+
+## Mesh vs hierarchy
+
+These two mechanisms are complementary, not competing. Hierarchy is always the foundation; mesh adds cross-cutting relationships on top of it.
+
+| Dimension | Hierarchy | Mesh |
+|-----------|-----------|------|
+| **Shape** | Tree — one parent, many children | Graph — many-to-many edges |
+| **Direction** | Top-down authority and scope | Any direction — indexers point to shared dirs |
+| **Purpose** | Scope isolation and safety inheritance | Shared content without duplication |
+| **Example** | `STATE.md` → `project-a/STATE.md` | `STATE.md` and `LEARNINGS.md` both index `audits/` |
+| **When it forms** | Automatically on directory nesting | Explicitly declared in `## Mesh index` sections |
+| **Risk** | None — structural default | Spaghetti if added too early or without discipline |
+
+## Concrete mesh patterns
+
+Three recurring patterns show up across different agent workloads. Each demonstrates the same principle: one entry in a shared directory is referenced by multiple root state files.
+
+### Pattern 1: Shared history
+
+`STATE.md` and `LEARNINGS.md` both index the `audits/` directory. When a security audit runs, a single file lands in `audits/`. Two state files reference it for different purposes:
+
+```text
+STATE.md ─────┐
+              ├──→ audits/2026-06-29-security.md
+LEARNINGS.md ─┘
+```
+
+- `STATE.md` references it as current system health: "secure as of 2026-06-29"
+- `LEARNINGS.md` references it as a learned rule: "rate limiting prevents brute force"
+
+One file, two contexts. No duplication. The audit lives once; each state file interprets it through its own lens.
+
+### Pattern 2: Cross-cutting memory
+
+`MEMORY.md` and `KNOWLEDGE.md` both index entries under `memory/semantic-*`. A single fact — the production server's IP address — lives in one place and is surfaced by both files:
+
+```text
+MEMORY.md ────┐
+              ├──→ memory/semantic-server-ip.md
+KNOWLEDGE.md ─┘
+```
+
+- `MEMORY.md` references it as "current server IP: 192.0.2.1"
+- `KNOWLEDGE.md` references it as an infrastructure fact in the broader knowledge catalog
+
+When the IP changes, one file is updated. Both state files immediately reflect the change because they index the same entry.
+
+### Pattern 3: Artifact provenance
+
+`ARTIFACTS.md` and `STATE.md` both index the `artifacts/` directory. A generated API specification lives in `artifacts/` and is tracked from two angles:
+
+```text
+ARTIFACTS.md ─┐
+              ├──→ artifacts/api-v2.spec.md
+STATE.md ─────┘
+```
+
+- `ARTIFACTS.md` tracks it as a deliverable: "api-v2.spec.md exists and is current"
+- `STATE.md` tracks it as a state signal: "current spec version: v2"
+
+Artifact provenance is maintained without copying content into either state file.
+
+## Mesh declaration syntax
+
+The mesh is explicit, not automatic. Each state file that participates in a mesh declares its edges in a `## Mesh index` section. No declaration means no edge — this prevents accidental cross-referencing.
+
+```markdown
+## Mesh index
+- **Indexes:** `snapshots/`, `audits/`, `artifacts/`
+- **Rule:** When overwriting, snapshot old version to `snapshots/` first
+```
+
+A fuller example showing multiple state files with overlapping index declarations:
+
+```markdown
+# STATE.md
+## Mesh index
+- **Indexes:** `snapshots/`, `audits/`, `artifacts/`
+- **Shared with:** LEARNINGS.md (audits/), ARTIFACTS.md (artifacts/)
+
+# LEARNINGS.md
+## Mesh index
+- **Indexes:** `reflections/`, `audits/`, `completed/`
+- **Shared with:** STATE.md (audits/)
+
+# ARTIFACTS.md
+## Mesh index
+- **Indexes:** `artifacts/`
+- **Shared with:** STATE.md (artifacts/)
+```
+
+The `audits/` directory appears in both `STATE.md` and `LEARNINGS.md` — that overlap is the mesh edge.
+
+## The query pattern payoff
+
+Explicit mesh indexes make cross-module impact visible. With a fully declared mesh, you can ask:
+
+> "I changed `src/shared/auth.ts`. Which STATE files index `src/shared/`? What depends on this?"
+
+The agent traces the mesh:
+
+<Steps>
+  <Step title="Locate the shared directory">
+    `src/shared/STATE.md` declares it indexes `src/shared/` — direct ownership identified.
+  </Step>
+  <Step title="Trace cross-module edges">
+    `backend/api/STATE.md` declares it indexes `../../src/shared/artifacts/` — upstream dependency found.
+  </Step>
+  <Step title="Follow audit edges">
+    `SECURITY.md` indexes `audits/`, which contains `2026-06-29-auth-audit.md` referencing auth logic — security impact surfaced.
+  </Step>
+  <Step title="Report impact">
+    Three state files are affected. Silent regressions are now visible before they become failures.
+  </Step>
+</Steps>
+
+Without the mesh, the agent would need to scan every file for references. With it, the impact graph is queryable in a single pass.
+
+## When to mesh — and when to skip
+
+<CardGroup cols={2}>
+  <Card title="Mesh when…">
+    - The same event matters to multiple concerns (state + learning + memory)
+    - You want history without bloating current state files
+    - Multiple agents share overlapping context
+    - An artifact is tracked both as a deliverable and as a state signal
+  </Card>
+  <Card title="Skip meshing when…">
+    - Data is truly private to one concern and no other file needs it
+    - You are on the Minimum tier — keep the system simple
+    - The directory is owned and read by exactly one state file
+    - You have not yet hit the problem the mesh solves
+  </Card>
+</CardGroup>
+
+<Warning>
+  Sloppy meshing is worse than no meshing. Declaring mesh edges without discipline turns a clean hierarchy into an opaque graph. Start with hierarchy; add mesh only when a concrete shared-directory need appears.
+</Warning>
+
+## Start hierarchy, add mesh
+
+The hierarchy is your safe default. Do not add mesh edges speculatively. Add them only when you encounter one of these concrete triggers:
+
+- The same audit entry is being referenced in both `STATE.md` and `LEARNINGS.md`
+- A memory entry is needed by both `MEMORY.md` and `KNOWLEDGE.md`
+- An artifact is tracked in both `ARTIFACTS.md` and `STATE.md`
+
+When the trigger appears, declare the edge explicitly. When it disappears (one of the state files is removed), remove the edge and clean up the orphaned declaration.
+
+<Tip>
+  Run `INIT.md` after any mesh change. It validates that all declared edges point to directories that exist and flags dangling references before they cause stale planning.
+</Tip>
+
+## Index vs copy
+
+Mesh relationships are built on references, not copies. The audit file lives in `audits/` once. State files hold pointers — filenames, timestamps, content hashes. The directory holds the payload.
+
+```text
+✅  STATE.md → "audits/2026-06-29-security.md (hash: abc123)"
+❌  STATE.md → [paste full audit content here]
+```
+
+This discipline keeps state files small enough to load into a context window while history grows unbounded in append-only directories.
+
+## Schema and mesh are interconnected
+
+The ontology's three-class taxonomy determines which files can participate in which kinds of mesh edges:
+
+| Class | Can mesh? | Direction | Why |
+|-------|-----------|-----------|-----|
+| **State** (root `.md` files) | Yes — outbound only | Indexes History and Library dirs | State files are always the indexer, never the indexed |
+| **History** (append-only dirs) | Yes — inbound only | Indexed by multiple State files | One audit entry serves many concerns |
+| **Library** (curated dirs) | Yes — bidirectional | Indexed by State; can index other Library | Memory entries can reference knowledge docs |
+
+A `snapshots/` entry (History class) can serve both `STATE.md` and `LEARNINGS.md`. A `memory/` entry (Library class) can serve both `MEMORY.md` and `KNOWLEDGE.md`. But `STATE.md` itself is never indexed by another file — it is always the indexer.
+
+<Note>
+  Schema changes require mesh updates. Adding a new state file means declaring its edges or it remains isolated. Removing a state file means removing all edges that pointed to it. `INIT.md` validation catches dangling edges before they silently break the system.
+</Note>
+
+<CardGroup cols={2}>
+  <Card title="Nesting" href="/advanced/nesting">
+    The hierarchy that underpins the mesh — how parent-child scope resolution works.
+  </Card>
+  <Card title="Vector Retrieval" href="/advanced/vector-retrieval">
+    Schema-validated mesh at scale: machine-readable edges, CI validation, and semantic search.
+  </Card>
+  <Card title="Ontology" href="/core/ontology">
+    State, History, and Library — the three classes that define meshability rules.
+  </Card>
+  <Card title="Hooks" href="/operations/hooks">
+    Automate re-indexing and re-embedding when mesh edges change.
+  </Card>
+</CardGroup>

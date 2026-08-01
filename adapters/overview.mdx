@@ -1,0 +1,98 @@
+---
+title: "Connecting Continuity to your agent runtime"
+sidebarTitle: "Overview"
+description: "Continuity is runtime-agnostic. Thin adapters wire it to Claude Code, OpenAI Codex, Hermes, OpenClaw, and Agent Zero — any agent that reads files works."
+---
+
+Continuity externalizes agent state into plain markdown files that survive session boundaries, model swaps, and process restarts. Because the system is built on files rather than a framework, it works with any agent runtime that can read and write files — a thin adapter is all that is needed to tell a specific runtime which file to load first and what to write back when work is done.
+
+## Supported runtimes
+
+Each adapter specifies the **entry file** the runtime auto-loads and the path to the adapter definition inside the Continuity skill:
+
+| Runtime | Entry file | Adapter |
+|---|---|---|
+| Claude Code | `CLAUDE.md` | `adapters/claude.md` |
+| OpenAI Codex | `AGENTS.md` | `adapters/codex.md` |
+| Hermes | `AGENTS.md` | `adapters/hermes.md` |
+| OpenClaw | `AGENTS.md` | `adapters/openclaw.md` |
+| Agent Zero | `AGENTS.md` | `adapters/agent-zero.md` |
+
+The entry file is the single file your runtime loads first. It declares the state topology — which files exist, in what load order, and what governance rules apply. Everything else follows from there.
+
+## Generic runtime setup
+
+If your runtime does not appear in the table above, the four-step pattern works for any agent that can read markdown files:
+
+<Steps>
+  <Step title="Copy templates to your workspace">
+    Copy the files you need from the Continuity repo into your agent workspace. Start with the Minimum tier and add files as your agent's loop requires them.
+
+    ```bash
+    cp continuity/{AGENTS,IDENTITY,SELF,SOUL,STATE,INIT,TODO,SNAPSHOT}.md /your/workspace/
+    ```
+  </Step>
+  <Step title="Read AGENTS.md, then INIT.md">
+    Point your agent at `AGENTS.md` as the entry file. On first boot, run the `INIT.md` nine-stage reconstitution procedure. It inspects the workspace, creates any missing files, and declares `READY` when the state chain is valid.
+  </Step>
+  <Step title="Load the state chain">
+    Before each action, load the smallest sufficient chain from root to the active task scope. Do not load every file by default — load only what the current task needs.
+
+    ```text
+    Global state → project state → subsystem state → task state → current action
+    ```
+  </Step>
+  <Step title="Write back changed state">
+    After every meaningful action, update the files whose claims are no longer accurate. At minimum: update `STATE.md` with new reality, move completed items from `TODO.md` to `completed/`, and refresh `SNAPSHOT.md`. No stale state — if reality changed, state changes.
+  </Step>
+</Steps>
+
+## Auto-injection
+
+Some frameworks inject files into the agent's context automatically on every session. `AGENTS.promptinclude.md` in the Continuity repo is the canonical auto-injection config. It lists files using `@filename` syntax. Any file listed there is pulled into the system prompt without the operator needing to reference it manually each session.
+
+```markdown
+# AGENTS.promptinclude.md — excerpt
+
+# Required tier (auto-loaded)
+@AGENTS.md
+@IDENTITY.md
+@SOUL.md
+@STATE.md
+@TODO.md
+@SNAPSHOT.md
+
+# Recommended tier (uncomment to enable)
+# @KNOWLEDGE.md
+# @TOOLS.md
+```
+
+<Note>
+  Auto-injection is opt-in and context-budget-aware. Only include files your agent actually needs on every turn. Uncommenting every entry in `AGENTS.promptinclude.md` on a large workspace will exhaust the context window before the agent can act.
+</Note>
+
+Runtimes that support auto-injection of this kind include:
+
+- **Cursor** — reads `.cursorrules` automatically on every turn
+- **Claude Code** — reads `CLAUDE.md` from the project root (and nested `CLAUDE.md` files in subdirectories)
+- **Hermes** — auto-injects `SOUL.md`, `MEMORY.md`, and `USER.md` from the Hermes home path
+- **Agent Zero** — uses `AGENTS.promptinclude.md` to inject files into the system prompt
+
+For runtimes without native auto-injection (Codex, OpenClaw, CLI-based agents), reference the state files explicitly in your entry file or wrapper script.
+
+## Adapter pages
+
+<CardGroup cols={2}>
+  <Card title="Claude Code" icon="c" href="/adapters/claude-code">
+    Wire Continuity through `CLAUDE.md`. Auto-loads from project root; supports hooks for pre/post-action validation.
+  </Card>
+  <Card title="OpenAI Codex" icon="robot" href="/adapters/codex">
+    Wire Continuity through `AGENTS.md`. Codex composes instructions across global, repository, and directory scopes.
+  </Card>
+  <Card title="Hermes, OpenClaw & Agent Zero" icon="plug" href="/adapters/other-runtimes">
+    Adapter notes for Hermes (progressive discovery), OpenClaw (SKILL.md security gates), and Agent Zero (prompt-include system).
+  </Card>
+  <Card title="Core Tiers" icon="layers" href="/core/tiers">
+    Not sure which files to copy? Start here — pick the smallest tier that fits your agent's loop.
+  </Card>
+</CardGroup>

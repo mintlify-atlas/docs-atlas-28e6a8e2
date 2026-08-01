@@ -1,0 +1,134 @@
+---
+title: "Using Continuity with OpenAI Codex (AGENTS.md)"
+sidebarTitle: "Codex"
+description: "Codex auto-loads AGENTS.md as its primary instruction file, composing state across global, repository, and directory scopes."
+---
+
+OpenAI Codex uses `AGENTS.md` as its primary instruction file and composes instructions across global, repository, and directory scopes automatically. Because Continuity's default entry file is already `AGENTS.md`, Codex requires no renaming or delegation step — copy the templates, declare the state chain in `AGENTS.md`, and Codex picks it up on the next run.
+
+## Setup
+
+<Steps>
+  <Step title="Copy Continuity templates to your workspace">
+    Copy the files matching your chosen tier from the Continuity repo into your project root:
+
+    ```bash
+    cp continuity/{AGENTS,IDENTITY,SELF,SOUL,STATE,INIT,TODO,SNAPSHOT}.md /your/workspace/
+    ```
+
+    Replace all `{{UPPER_CASE}}` placeholders before running. Use the Minimum tier to start and add files as your agent's loop requires them.
+  </Step>
+  <Step title="Place AGENTS.md in the project root">
+    Codex composes `AGENTS.md` from three scopes in order: global (user home), repository root, and the directory the agent is currently working in. Place your Continuity `AGENTS.md` at the repository root. Codex will merge it with any global instructions automatically.
+
+    You do not need a separate `CLAUDE.md` or wrapper file — `AGENTS.md` is the native entry point for Codex.
+  </Step>
+  <Step title="Declare the state file load order in AGENTS.md">
+    Edit `AGENTS.md` to include an explicit load order. Codex reads this as part of its instruction composition:
+
+    ```markdown
+    ## Boot sequence
+
+    On every session, load in order:
+    1. IDENTITY.md — instance identity
+    2. STATE.md    — current operational truth
+    3. TODO.md     — active task queue
+    4. SNAPSHOT.md — last known good state
+
+    Read STATE.md before acting.
+    After meaningful work, update STATE.md, TODO.md, and SNAPSHOT.md.
+    Write output updates as structured file changes.
+    ```
+
+    Add further files (`MEMORY.md`, `TOOLS.md`, `PLAN.md`) only when your agent's loop actually needs them.
+  </Step>
+  <Step title="Replace placeholders and confirm READY state">
+    Search all copied files for `{{UPPER_CASE}}` markers and fill them in. Prompt Codex to read the state chain and confirm readiness:
+
+    ```
+    Read STATE.md and TODO.md. If READY, implement the next valid action.
+    Update continuity files after work is complete.
+    ```
+  </Step>
+</Steps>
+
+## Key difference from Claude Code
+
+The main distinction between the Claude Code and Codex adapters is which file the runtime auto-loads:
+
+| | Claude Code | Codex |
+|---|---|---|
+| **Auto-loaded file** | `CLAUDE.md` | `AGENTS.md` |
+| **Scope composition** | Nested `CLAUDE.md` per directory | Global → repo → directory `AGENTS.md` |
+| **Entry file** | `CLAUDE.md` (or delegates to `AGENTS.md`) | `AGENTS.md` directly |
+| **Auto-injection** | `AGENTS.promptinclude.md` (Claude-native) | Not supported natively |
+
+Because Codex does not support native auto-injection via `AGENTS.promptinclude.md`, reference all state files explicitly in `AGENTS.md` rather than relying on a promptinclude list. This also means you should be intentional about load order — Codex will not pull in `IDENTITY.md` or `SNAPSHOT.md` unless `AGENTS.md` instructs it to.
+
+## Writeback contract
+
+Codex writes file updates as part of its result output. The expected writeback shape after each meaningful action is:
+
+```json
+{
+  "status": "READY",
+  "file_updates": {
+    "STATE.md": "..updated content..",
+    "TODO.md": "..updated content..",
+    "SNAPSHOT.md": "..updated content.."
+  }
+}
+```
+
+At minimum, Codex must update `STATE.md` (new operational truth), `TODO.md` (task queue with completed items marked), and `SNAPSHOT.md` (refreshed restoration anchor) after every meaningful session. Move completed tasks to `completed/` with evidence entries.
+
+<Warning>
+  Codex produces file updates as part of its output — if your wrapper or calling code does not apply those updates to disk, the state chain will drift. Ensure your tooling writes the `file_updates` payload back to the filesystem after each run.
+</Warning>
+
+## Minimal Codex configuration
+
+A minimal `AGENTS.md` for Codex looks like this:
+
+```markdown
+# AGENTS.md
+
+## Identity
+Role: {{AGENT_ROLE}}
+Version: {{AGENT_VERSION}}
+
+## Boot sequence
+On every session:
+1. Read IDENTITY.md
+2. Read STATE.md — current operational truth
+3. Read TODO.md  — active task queue
+4. Read SNAPSHOT.md — restoration anchor
+
+## Governance
+- Act only within defined scope.
+- Check WARNING.md hard limits before irreversible actions.
+- Never store secrets in markdown files.
+
+## Writeback
+After meaningful work:
+- Update STATE.md with new reality.
+- Update TODO.md — move completed items to completed/.
+- Refresh SNAPSHOT.md.
+- Commit all changes.
+```
+
+<Tip>
+  If you need to chain Codex output into a subsequent Claude Code or Hermes session, no prompt recap is needed. Once Codex writes `STATE.md` and `TODO.md`, any runtime that reads those files can continue from the same workspace — that handoff is the core value of the file-based state model.
+</Tip>
+
+## Wrapper script (optional)
+
+For automated pipelines, a thin wrapper script can drive Codex with a consistent prompt:
+
+```bash
+python run_with_continuity.py \
+  --workspace . \
+  --task "Read TODO.md, implement the next valid action, update continuity files"
+```
+
+The wrapper is optional. It is useful when Codex runs as part of a CI pipeline or a multi-agent orchestration loop where the calling process needs to manage state file writes programmatically.
