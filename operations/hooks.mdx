@@ -18,37 +18,33 @@ Hooks watch specific state files and execute configured actions when those files
 ## Setup
 
 <Steps>
+  <Step title="Copy and customize the example config">
+    Copy `hooks.example.yaml` into your workspace and edit it to match your environment. The file uses environment variables for sensitive endpoints — set `CONTINUITY_STATE_WEBHOOK` and `CONTINUITY_NOTIFY_ENDPOINT` in your shell before running the watcher.
 
-### Copy and customize the example config
+    ```bash
+    cp hooks/hooks.example.yaml /your/workspace/hooks.yaml
+    ```
+  </Step>
+  <Step title="Run a file watcher">
+    Hooks require an external file watcher to detect changes. Three common options:
 
-Copy `hooks.example.yaml` into your workspace and edit it to match your environment. The file uses environment variables for sensitive endpoints — set `CONTINUITY_STATE_WEBHOOK` and `CONTINUITY_NOTIFY_ENDPOINT` in your shell before running the watcher.
+    ```bash
+    # watchexec — watches STATE.md and runs the script on each change
+    watchexec -w STATE.md -- python3 hooks/webhook-on-state-change.py
 
-```bash
-cp hooks/hooks.example.yaml /your/workspace/hooks.yaml
-```
+    # entr — pipe a file list, re-run on any change
+    ls STATE.md TODO.md SNAPSHOT.md | entr python3 hooks/webhook-on-state-change.py
 
-### Run a file watcher
-
-Hooks require an external file watcher to detect changes. Three common options:
-
-```bash
-# watchexec — watches STATE.md and runs the script on each change
-watchexec -w STATE.md -- python3 hooks/webhook-on-state-change.py
-
-# entr — pipe a file list, re-run on any change
-ls STATE.md TODO.md SNAPSHOT.md | entr python3 hooks/webhook-on-state-change.py
-
-# inotifywait — Linux inotify, useful in CI and server environments
-inotifywait -m -e close_write STATE.md TODO.md SNAPSHOT.md \
-  --format '%w' | while read file; do
-    python3 hooks/webhook-on-state-change.py
-  done
-```
-
-### Or use the example webhook script directly
-
-The repository ships a self-contained Python script that reads `CONTINUITY_STATE_WEBHOOK` from the environment, appends an event to `logs/events.jsonl`, and POSTs a JSON payload to the webhook URL. No dependencies beyond the Python standard library.
-
+    # inotifywait — Linux inotify, useful in CI and server environments
+    inotifywait -m -e close_write STATE.md TODO.md SNAPSHOT.md \
+      --format '%w' | while read file; do
+        python3 hooks/webhook-on-state-change.py
+      done
+    ```
+  </Step>
+  <Step title="Or use the example webhook script directly">
+    The repository ships a self-contained Python script that reads `CONTINUITY_STATE_WEBHOOK` from the environment, appends an event to `logs/events.jsonl`, and POSTs a JSON payload to the webhook URL. No dependencies beyond the Python standard library.
+  </Step>
 </Steps>
 
 ## hooks.example.yaml
@@ -159,7 +155,7 @@ The script builds a minimal event object with a UTC timestamp, event type, affec
   Run `check-placeholders.sh` or `state-file-audit.sh` automatically when state files change — the same validation you'd run in a CI pipeline, triggered locally by the file watcher.
 </Card>
 
-<Card title="Auto-embed for vector stores" icon="database" href="/advanced/vector-retrieval">
+<Card title="Auto-embed for vector stores" icon="database">
   Hook into `STATE.md` and `SNAPSHOT.md` changes to trigger re-embedding. Keeps your vector store in sync with the agent's current cognitive state without manual reruns.
 </Card>
 

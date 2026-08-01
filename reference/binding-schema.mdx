@@ -159,9 +159,7 @@ description: "The JSON Schema for recursive agent bindings — every field expla
   **Example:** `["budget exhausted", "test suite regression detected", "scope exceeds auth module"]`
 </ParamField>
 
-### Optional fields
-
-<ParamField path="budget" type="object">
+<ParamField path="budget" type="object" required>
   Resource limits for this binding. All limits are enforced by the runtime — the agent must not exceed them regardless of whether the objective is complete.
 
   <Expandable title="budget fields">
@@ -186,6 +184,8 @@ description: "The JSON Schema for recursive agent bindings — every field expla
     </ParamField>
   </Expandable>
 </ParamField>
+
+### Optional fields
 
 <ParamField path="checkpoint" type="object">
   Configures the approval gate that governs when the agent must pause and seek human or parent-agent confirmation.

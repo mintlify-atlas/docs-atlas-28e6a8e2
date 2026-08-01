@@ -84,29 +84,47 @@ For larger changes, also update:
   Do not preserve stale state for politeness. If reality changed during a session, the state files must reflect that change before the session ends. Stale state causes the next session to boot with incorrect context.
 </Warning>
 
-## Auto-injection with AGENTS.promptinclude.md
+## Auto-injection and AGENTS.promptinclude.md
 
-Claude Code supports auto-injection: files listed in `AGENTS.promptinclude.md` are pulled into the context on every session without manual loading. Use this to ensure critical state files are always available:
+Claude Code auto-loads `CLAUDE.md` natively — it does not use `AGENTS.promptinclude.md` as an auto-injection mechanism. `AGENTS.promptinclude.md` is for runtimes such as Agent Zero and Cursor that support a prompt-include protocol. For Claude Code, the equivalent is declaring your load order directly inside `CLAUDE.md` so the agent loads the right state files on every turn by following its own specification.
+
+If you also use runtimes that do read `AGENTS.promptinclude.md` (Agent Zero, Cursor), you can keep the file in your workspace for those runtimes. The full required-tier list from the Continuity repository:
 
 ```markdown
 # AGENTS.promptinclude.md
 
-# Required tier (auto-loaded every session)
+# Required tier (auto-loaded)
 @AGENTS.md
 @IDENTITY.md
 @SOUL.md
+@SELF.md
+@USER.md
+@INIT.md
+@MEMORY.md
+@TOOLS.md
 @STATE.md
+@CONTEXT.md
+@PLAN.md
 @TODO.md
 @SNAPSHOT.md
 
 # Recommended tier (uncomment to enable)
-# @MEMORY.md
-# @TOOLS.md
-# @PLAN.md
+# @KNOWLEDGE.md
+# @INFRASTRUCTURE.md
+# @POTENTIAL.md
+# @CONTEXT_BUDGET.md
+# @MISSIONS.md
+# @TASKS.md
+# @LEARNINGS.md
+# @WARNING.md
+# @HEARTBEAT.md
+# @EVENTS.md
+# @BOOTSTRAP.md
+# @BOOT.md
 ```
 
 <Tip>
-  Keep the auto-injected set small. Only include files the agent genuinely needs on every turn. Files that are only relevant for specific tasks should be loaded on demand, not auto-injected — your context budget is finite.
+  Keep the load order in `CLAUDE.md` small. Only include files the agent genuinely needs on every turn. Files that are only relevant for specific tasks should be loaded on demand, not listed in the boot sequence — your context budget is finite.
 </Tip>
 
 ## Nested workspace example

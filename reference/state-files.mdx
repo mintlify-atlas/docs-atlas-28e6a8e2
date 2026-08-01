@@ -46,6 +46,12 @@ State files are **current-value stores**. Every file answers a single question a
 | `CHECKPOINT.md` | Safety | Approval gate before irreversible actions |
 | `AGENT_ACTIONS.md` | Runtime | Action reference (conceptual) |
 | `BINDING.schema.json` | Runtime | Machine-readable binding contract |
+| `BACKLOG.md` | State | Rolling inbox for pre-triage |
+| `MISSIONS.md` | State | High-level priorities |
+| `HEARTBEAT.md` | State | Periodic check protocol |
+| `AGENTS.promptinclude.md` | Meta | Auto-injection config |
+| `USAGE.md` | Meta | Quick start guide |
+| `CHANGELOG.md` | Meta | Version history |
 
 ## Clusters
 
@@ -198,9 +204,7 @@ The capability cluster documents what the agent can use: tools, infrastructure, 
     Defines auto-load budget, taint classes, exclusions, and log retention. Controls what gets loaded into the context window on boot and what is deferred. Critical for preventing context overflow in large deployments.
   </Accordion>
   <Accordion title="EVENTS.md — Event log pointer">
-    Holds a recent event summary and a pointer to the `logs/` directory for detailed JSONL event logs. Tracks significant system events without duplicating log content. Update when significant events occur.
-
-    **Mesh indexes:** `logs/`
+    Holds a recent event summary and a pointer to detailed JSONL event logs. Tracks significant system events without duplicating log content. Update when significant events occur.
   </Accordion>
   <Accordion title="ARTIFACTS.md — Generated artifact inventory">
     Holds an inventory of generated outputs and evidence: files, reports, specs, and other deliverables the agent has produced. Update whenever an artifact is created or invalidated.

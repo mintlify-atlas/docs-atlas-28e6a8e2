@@ -58,13 +58,30 @@ Some frameworks inject files into the agent's context automatically on every ses
 @AGENTS.md
 @IDENTITY.md
 @SOUL.md
+@SELF.md
+@USER.md
+@INIT.md
+@MEMORY.md
+@TOOLS.md
 @STATE.md
+@CONTEXT.md
+@PLAN.md
 @TODO.md
 @SNAPSHOT.md
 
 # Recommended tier (uncomment to enable)
 # @KNOWLEDGE.md
-# @TOOLS.md
+# @INFRASTRUCTURE.md
+# @POTENTIAL.md
+# @CONTEXT_BUDGET.md
+# @MISSIONS.md
+# @TASKS.md
+# @LEARNINGS.md
+# @WARNING.md
+# @HEARTBEAT.md
+# @EVENTS.md
+# @BOOTSTRAP.md
+# @BOOT.md
 ```
 
 <Note>
@@ -75,10 +92,10 @@ Runtimes that support auto-injection of this kind include:
 
 - **Cursor** — reads `.cursorrules` automatically on every turn
 - **Claude Code** — reads `CLAUDE.md` from the project root (and nested `CLAUDE.md` files in subdirectories)
-- **Hermes** — auto-injects `SOUL.md`, `MEMORY.md`, and `USER.md` from the Hermes home path
-- **Agent Zero** — uses `AGENTS.promptinclude.md` to inject files into the system prompt
+- **Hermes** — auto-injects `SOUL.md`, `MEMORY.md`, and `USER.md` from the Hermes home path (`~/.hermes/`)
+- **Agent Zero** — uses `AGENTS.promptinclude.md` to inject files into the system prompt automatically
 
-For runtimes without native auto-injection (Codex, OpenClaw, CLI-based agents), reference the state files explicitly in your entry file or wrapper script.
+For runtimes without native auto-injection via `AGENTS.promptinclude.md` (Codex, OpenClaw, CLI-based agents), reference the state files explicitly in your entry file or wrapper script. Claude Code uses its own `CLAUDE.md` auto-load mechanism rather than `AGENTS.promptinclude.md`.
 
 ## Adapter pages
 

@@ -1,5 +1,5 @@
 ---
-title: "Orchestrator pack: coordinating multiple agents"
+title: "Orchestrator pack: state files for multi-agent coordination"
 sidebarTitle: "Orchestrator"
 description: "The orchestrator pack gives a coordinating agent a shared task queue, machine-readable binding contracts, a cross-agent event log, and state snapshots."
 ---
@@ -19,7 +19,7 @@ The orchestrator pack is for agents whose primary job is to coordinate other age
 
 ### AGENTS.md
 
-The orchestrator entry file contains everything a standard `AGENTS.md` contains, plus an agent registry — a table listing every agent that operates under this orchestrator, its type (`worker` or `team-leader`), its role, the pack it uses, its maximum delegation depth, and the maximum number of subordinates it may spawn. Workers are sterile: `max_depth: 0`, `max_subordinates: 0`, no access to `call_subordinate`. Team leaders may spawn workers, but cannot spawn other team leaders. No subordinate has higher privileges than its parent.
+The orchestrator entry file contains everything a standard `AGENTS.md` contains, plus an agent registry — a table listing every agent that operates under this orchestrator, its type (`worker` or `team-leader`), its role, the pack it uses, its maximum delegation depth, and the maximum number of subordinates it may spawn. Workers are sterile: `max_depth: 0`, no access to `call_subordinate`. Team leaders may spawn workers, but cannot spawn other team leaders. No subordinate has higher privileges than its parent.
 
 ### TASKS.md — shared task queue for multi-agent coordination
 
@@ -44,13 +44,13 @@ A binding contract has six required fields:
 
 <Tabs>
   <Tab title="who">
-    The agent's identity: name, role, parent agent, and type (`worker` or `team-leader`). Workers cannot spawn subordinates. Team leaders may spawn workers only, up to `max_subordinates`.
+    The agent's identity: `name`, `role`, and `parent` (the `binding_id` of the parent binding, if this is a delegated sub-binding). The agent's operational type (`worker` or `team-leader`) is declared in the `AGENTS.md` registry, not in the binding itself.
   </Tab>
   <Tab title="what">
     The objective and success criteria. The objective is the specific task. The success criteria describe what a verifiable completion looks like — not "implement auth" but "endpoint returns 201 on valid input, 400 on invalid input, tests passing."
   </Tab>
   <Tab title="budget">
-    Hard limits on resources: `max_seconds` (wall-clock time), `max_tokens` (LLM token budget), `max_turns` (reasoning turns), `max_depth` (delegation depth — 0 for workers), `max_subordinates`, and `max_disk_mb`. Every agent has a budget. No infinite recursion. No unbounded token spend.
+    Hard limits on resources: `max_seconds` (wall-clock time), `max_tokens` (LLM token budget), `max_turns` (reasoning turns), `max_depth` (delegation depth — 0 for workers), and `max_disk_mb`. Every agent has a budget. No infinite recursion. No unbounded token spend.
   </Tab>
   <Tab title="allowed_tools">
     An explicit list of tools the agent may use. Workers must not include `call_subordinate`. If a tool is not on the list, the agent does not use it — even if the runtime makes it available.
@@ -62,8 +62,6 @@ A binding contract has six required fields:
     Where the agent writes its result output: a file path and format (`markdown`, `json`, or `text`). Results are written here for the orchestrator to collect after the binding closes.
   </Tab>
 </Tabs>
-
-An optional `h_gate` field defines human approval triggers — actions within the agent's scope that require a human to confirm before proceeding, such as deploying to production or deleting a database.
 
 See [Runtime Contracts](/advanced/runtime-contracts) for full schema details and worked binding examples.
 
@@ -83,7 +81,7 @@ A timestamped record of the last known good state of the entire pipeline: which 
 
 The orchestrator pack lives at the root of the project. Each specialist agent that the orchestrator coordinates gets its own pack in a subdirectory. Each agent loads only its own state chain — the backend agent reads `backend/AGENTS.md`, not the root `AGENTS.md`.
 
-```
+```text
 /AGENTS.md           # orchestrator entry
 /TASKS.md            # shared task queue
 /PLAN.md             # execution plan

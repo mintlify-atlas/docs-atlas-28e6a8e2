@@ -1,7 +1,7 @@
 ---
 title: "Using Continuity with OpenAI Codex (AGENTS.md)"
 sidebarTitle: "Codex"
-description: "Codex auto-loads AGENTS.md as its primary instruction file, composing state across global, repository, and directory scopes."
+description: "Codex auto-loads AGENTS.md as its primary instruction file and composes state across global, repository, and directory scopes with no renaming step."
 ---
 
 OpenAI Codex uses `AGENTS.md` as its primary instruction file and composes instructions across global, repository, and directory scopes automatically. Because Continuity's default entry file is already `AGENTS.md`, Codex requires no renaming or delegation step — copy the templates, declare the state chain in `AGENTS.md`, and Codex picks it up on the next run.

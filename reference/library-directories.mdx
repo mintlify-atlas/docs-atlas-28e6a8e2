@@ -1,7 +1,7 @@
 ---
-title: "Library directories: curated knowledge stores"
+title: "Library directories: curated memory and knowledge stores"
 sidebarTitle: "Library Directories"
-description: "The `memory/` and `knowledge/` library directories — schema, namespaces, delivery types, and why they must never be merged."
+description: "The `memory/` and `knowledge/` library directories — entry schema, namespaces, delivery types, and why the two stores must never be merged."
 ---
 
 Library directories are the curated knowledge stores of Continuity. Unlike history directories — which are append-only and grow monotonically — library directories are maintained over time: entries can be added, updated, or retired as facts change. There are two library directories: `memory/` for structured memory entries with a schema and index, and `knowledge/` for topic-organized reference documents. They serve different purposes and must be kept separate.
@@ -23,14 +23,8 @@ The `memory/` directory holds durable facts organized by topic and namespace. Ea
 memory/
 ├── INDEX.md           ← Manifest — all entries, tags, mesh connections
 ├── SCHEMA.md          ← Schema definition — full frontmatter spec
-└── entries/
-    └── YYYY-MM-DD-namespace-tag-description.md
+└── namespace-topic-slug.md   ← Individual memory entries
 ```
-
-<Note>
-  In practice, entries are commonly organized by namespace subdirectory:
-  `memory/semantic/`, `memory/procedural/`, `memory/episodic/`, `memory/working/`
-</Note>
 
 ### Entry naming
 

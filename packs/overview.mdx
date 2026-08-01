@@ -1,5 +1,5 @@
 ---
-title: "State Packs: role-specific agent configurations"
+title: "State Packs: role-specific agent state configurations"
 sidebarTitle: "Overview"
 description: "State packs are cohesive sets of files pre-wired for a specific agent role — choose one, copy it, fill placeholders, and get a working state system."
 ---
@@ -70,7 +70,7 @@ A state pack is a curated collection of state files that work together as a cohe
 
 When an orchestrator agent coordinates multiple specialist agents, place the orchestrator pack at the root and each specialist pack in its own subdirectory. Each agent loads only its own state chain — agents never load sibling packs.
 
-```
+```text
 /AGENTS.md     /TASKS.md     /PLAN.md        # orchestrator pack at root
 ├── backend/
 │   ├── AGENTS.md

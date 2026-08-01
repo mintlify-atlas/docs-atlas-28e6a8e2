@@ -1,5 +1,5 @@
 ---
-title: "File reference: every Continuity file explained"
+title: "Continuity file reference: every file and directory"
 sidebarTitle: "Overview"
 description: "A complete guide to every file and directory in Continuity — what each one is, where it lives, who owns it, and when to update it."
 ---
@@ -49,6 +49,12 @@ State holds one current value per concern. When a state file is overwritten, the
 | `CHECKPOINT.md` | Safety | Approval gate before irreversible actions |
 | `AGENT_ACTIONS.md` | Runtime | Action reference (conceptual) |
 | `BINDING.schema.json` | Runtime | Machine-readable binding contract |
+| `BACKLOG.md` | State | Rolling inbox for pre-triage |
+| `MISSIONS.md` | State | High-level priorities |
+| `HEARTBEAT.md` | State | Periodic check protocol |
+| `AGENTS.promptinclude.md` | Meta | Auto-injection config |
+| `USAGE.md` | Meta | Quick start guide |
+| `CHANGELOG.md` | Meta | Version history |
 
 ## History directories — quick reference
 
@@ -78,7 +84,7 @@ State holds one current value per concern. When a state file is overwritten, the
     icon="file-lines"
     href="/reference/state-files"
   >
-    All 27 root `.md` files — what each one holds, which cluster it belongs to, and when to update it.
+    Every root state file — what each one holds, which cluster it belongs to, and when to update it.
   </Card>
   <Card
     title="History Directories"

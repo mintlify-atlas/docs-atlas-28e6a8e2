@@ -1,7 +1,7 @@
 ---
-title: "Deployment tiers: from Minimum to Advanced"
+title: "Deployment tiers: Minimum, Standard, Full, and Advanced"
 sidebarTitle: "Tiers"
-description: "Choose the right starting tier for your agent — Minimum, Standard, Full, or Advanced — and learn when to add more files."
+description: "Choose the right starting tier for your agent — Minimum, Standard, Full, or Advanced — and learn exactly when to grow your file set."
 ---
 
 Continuity's tiers are suggested starting templates, not requirements. They exist because different agents need different amounts of state — a simple task-runner needs almost nothing; a recursive multi-agent orchestrator needs the full inventory. Pick the smallest tier that gives your agent the continuity it actually requires, then add files only when your loop genuinely needs them.
@@ -134,17 +134,17 @@ The full template set exists because different loop types need different state s
 
 ## Sample configurations
 
-The `samples/` directory contains concrete, pre-configured setups for common agent types — a minimal coding agent, a standard research agent, and a full operational agent. These are real configurations, not just tier descriptions.
+The repository's `samples/` directory contains concrete, pre-configured workspaces for common agent types — a minimal coding agent, a standard research agent, and a full operational agent. Browse the domain-specific state packs for pre-wired configurations you can copy and customize.
 
 <CardGroup cols={2}>
-  <Card title="samples/minimum/" href="/packs/overview">
+  <Card title="Minimum sample" href="/packs/overview">
     Simple coding agent — 8 files: identity, boot, and task tracking only.
   </Card>
-  <Card title="samples/standard/" href="/packs/overview">
-    Research agent — 14 files: adds soul, user model, memory, tools, and planning.
+  <Card title="Standard sample" href="/packs/overview">
+    Research agent — 16 files: adds user model, memory, tools, planning, tasks, learnings, and heartbeat.
   </Card>
-  <Card title="samples/full/" href="/packs/overview">
-    Operational agent — 25 files: adds learnings, heartbeat, knowledge, events, artifacts, safety, and boot.
+  <Card title="Full sample" href="/packs/overview">
+    Operational agent — 27 files: adds infrastructure, potential, context budget, missions, backlog, safety, knowledge, events, artifacts, and boot.
   </Card>
   <Card title="Packs overview" href="/packs/overview">
     Domain-specific packs — developer, backend, researcher, judge, ops, orchestrator, and more.
